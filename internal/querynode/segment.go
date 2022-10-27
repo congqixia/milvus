@@ -34,6 +34,9 @@ import (
 	"sync"
 	"unsafe"
 
+	// add symbolizer for cgo call
+	_ "github.com/searKing/golang/go/runtime/cgosymbolizer"
+
 	"github.com/milvus-io/milvus/internal/util/concurrency"
 	"github.com/milvus-io/milvus/internal/util/funcutil"
 	"github.com/milvus-io/milvus/internal/util/typeutil"
