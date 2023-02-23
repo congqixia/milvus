@@ -604,7 +604,7 @@ type IndexStateCnt struct {
 }
 
 // GetIndexStates gets the index states for indexID from meta table.
-func (mt *metaTable) GetIndexStates(indexID int64, createTs uint64) ([]*IndexState, IndexStateCnt) {
+func (mt *metaTable) GetIndexStates(indexID int64, createTs uint64, filters ...func(segIdx *model.SegmentIndex) bool) ([]*IndexState, IndexStateCnt) {
 	mt.segmentIndexLock.RLock()
 	defer mt.segmentIndexLock.RUnlock()
 
@@ -629,6 +629,11 @@ func (mt *metaTable) GetIndexStates(indexID int64, createTs uint64) ([]*IndexSta
 		if segIdx.IsDeleted {
 			// skip deleted index, deleted by compaction
 			continue
+		}
+		for _, f := range filters {
+			if !f(segIdx) {
+				continue
+			}
 		}
 		switch segIdx.IndexState {
 		case commonpb.IndexState_IndexStateNone:
