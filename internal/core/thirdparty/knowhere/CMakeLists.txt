@@ -28,7 +28,7 @@ macro(build_knowhere)
     message(STATUS ${CMAKE_BUILD_TYPE})
     set(KNOWHERE_CMAKE_ARGS
             ${EP_COMMON_CMAKE_ARGS}
-            -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
+            -DCMAKE_BUILD_TYPE="Debug"
             -DCMAKE_INSTALL_PREFIX=${KNOWHERE_INSTALL_PREFIX}
             )
 
