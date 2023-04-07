@@ -482,7 +482,6 @@ func (s *Session) processKeepAliveResponse(ch <-chan *clientv3.LeaseKeepAliveRes
 					log.Warn("session keepalive response failed")
 					s.safeCloseLiveCh()
 				}
-				//failCh <- true
 			}
 		}
 	}()
