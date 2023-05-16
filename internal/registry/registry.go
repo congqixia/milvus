@@ -16,6 +16,23 @@
 
 package registry
 
-// Registry is the interface for service registry
+import (
+	context "context"
+
+	options "github.com/milvus-io/milvus/internal/registry/options"
+)
+
+// Registry is the interface for service registry.
 type Registry interface {
+	RegisterService(ctx context.Context, service string, entry ServiceEntry, opts ...options.RegisterOption) error
+	DeregisterService(ctx context.Context, service string, entry ServiceEntry) error
+	GetService(ctx context.Context, service string) (ServiceEntry, error)
+	ListServices(ctx context.Context, service string) ([]ServiceEntry, error)
+	WatchService(ctx context.Context, service string, opts ...options.WatchOption) (ServiceWatcher[any], error)
+}
+
+// Watcher interface is the abstraction for service watcher.
+type Watcher interface {
+	Watch() <-chan SessionEvent[any]
+	Stop()
 }
