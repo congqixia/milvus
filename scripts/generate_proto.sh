@@ -27,7 +27,9 @@ ROOT_DIR="$( cd -P "$( dirname "$SOURCE" )/.." && pwd )"
 PROTO_DIR=$ROOT_DIR/internal/proto/
 API_PROTO_DIR=$ROOT_DIR/cmake_build/thirdparty/milvus-proto/proto
 CPP_SRC_DIR=$ROOT_DIR/internal/core
-PROTOC_BIN=$ROOT_DIR/cmake_build/bin/protoc
+PROTOC_BIN=$ROOT_DIR/cmake_build/bin/protoc-3.21.4.0
+
+ls $ROOT_DIR/cmake_build/bin/
 
 PROGRAM=$(basename "$0")
 GOPATH=$(go env GOPATH)
