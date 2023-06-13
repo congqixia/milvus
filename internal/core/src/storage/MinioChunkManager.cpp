@@ -26,6 +26,7 @@
 #include <aws/s3/model/ListObjectsRequest.h>
 #include <aws/s3/model/GetObjectRequest.h>
 #include <aws/s3/model/PutObjectRequest.h>
+#include <boost/stacktrace.hpp>
 
 #include "storage/MinioChunkManager.h"
 #include "storage/AliyunSTSClient.h"
@@ -51,7 +52,8 @@ static void
 SwallowHandler(int signal) {
     switch (signal) {
         case SIGPIPE:
-            LOG_SERVER_WARNING_ << "SIGPIPE Swallowed" << std::endl;
+            LOG_SERVER_WARNING_ << "SIGPIPE Swallowed";
+            LOG_SERVER_WARNING_ << boost::stacktrace::stacktrace();
             break;
         default:
             LOG_SERVER_ERROR_ << "Unexpected signal in SIGPIPE handler: " << signal << std::endl;
@@ -104,6 +106,7 @@ MinioChunkManager::InitSDKAPI(RemoteStorageType type) {
             };
         }
 #endif
+        sdk_options_.loggingOptions.logLevel = Aws::Utils::Logging::LogLevel::Info;
         Aws::InitAPI(sdk_options_);
     }
 }
