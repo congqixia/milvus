@@ -24,8 +24,8 @@ import (
 
 // Registry is the interface for service registry.
 type Registry interface {
-	RegisterService(ctx context.Context, service string, entry ServiceEntry, opts ...options.RegisterOption) error
-	DeregisterService(ctx context.Context, service string, entry ServiceEntry) error
+	RegisterService(ctx context.Context, service string, addr string, opts ...options.RegisterOption) (ServiceEntry, error)
+	DeregisterService(ctx context.Context, entry ServiceEntry) error
 	GetService(ctx context.Context, service string) (ServiceEntry, error)
 	ListServices(ctx context.Context, service string) ([]ServiceEntry, error)
 	WatchService(ctx context.Context, service string, opts ...options.WatchOption) (ServiceWatcher[any], error)

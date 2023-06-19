@@ -16,34 +16,7 @@
 
 package etcd
 
-import (
-	"context"
-	"encoding/json"
-	"fmt"
-	"path"
-
-	"github.com/cockroachdb/errors"
-	grpcdatacoordclient "github.com/milvus-io/milvus/internal/distributed/datacoord/client"
-	grpcdatanodeclient "github.com/milvus-io/milvus/internal/distributed/datanode/client"
-	grpcindexnodeclient "github.com/milvus-io/milvus/internal/distributed/indexnode/client"
-	grpcproxyclient "github.com/milvus-io/milvus/internal/distributed/proxy/client"
-	grpcquerycoordclient "github.com/milvus-io/milvus/internal/distributed/querycoord/client"
-	grpcquerynodeclient "github.com/milvus-io/milvus/internal/distributed/querynode/client"
-	grpcrootcoordclient "github.com/milvus-io/milvus/internal/distributed/rootcoord/client"
-	"github.com/milvus-io/milvus/internal/registry"
-	"github.com/milvus-io/milvus/internal/registry/common"
-	"github.com/milvus-io/milvus/internal/registry/options"
-	"github.com/milvus-io/milvus/internal/types"
-	milvuscommon "github.com/milvus-io/milvus/pkg/common"
-	"github.com/milvus-io/milvus/pkg/log"
-	"github.com/milvus-io/milvus/pkg/util/merr"
-	"github.com/milvus-io/milvus/pkg/util/paramtable"
-	"github.com/milvus-io/milvus/pkg/util/typeutil"
-	"github.com/samber/lo"
-	clientv3 "go.etcd.io/etcd/client/v3"
-	"go.uber.org/zap"
-)
-
+/*
 type etcdServiceDiscovery struct {
 	client   *clientv3.Client
 	metaRoot string
@@ -209,7 +182,7 @@ func (s *etcdServiceDiscovery) registerService(ctx context.Context, component st
 		return nil, merr.WrapErrParameterInvalid("legal component type", component)
 	}
 
-	opt := options.DefaultSessionOpt()
+	opt := options.DefaultRegisterOpt()
 	for _, o := range opts {
 		o(&opt)
 	}
@@ -254,3 +227,4 @@ func listWatch[T any](ctx context.Context, s *etcdServiceDiscovery, component st
 type serviceProvider func(ctx context.Context) (string, int64, error)
 
 func (sp serviceProvider) GetServiceEntry(ctx context.Context) (string, int64, error) { return sp(ctx) }
+*/

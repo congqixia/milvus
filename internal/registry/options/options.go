@@ -16,33 +16,55 @@
 
 package options
 
-type SessionOpt struct {
-	StandBy     bool
-	Exclusive   bool
-	TriggerKill bool
+import "github.com/milvus-io/milvus/pkg/util/paramtable"
+
+type RegisterOpt struct {
+	StandBy        bool
+	Exclusive      bool
+	TriggerKill    bool
+	SessionTTL     int64
+	PresetServerID bool
+	ServerID       int64
 }
 
-func DefaultSessionOpt() SessionOpt {
-	return SessionOpt{
-		StandBy:     false,
-		Exclusive:   false,
-		TriggerKill: true,
+func DefaultRegisterOpt() RegisterOpt {
+	return RegisterOpt{
+		StandBy:        false,
+		Exclusive:      false,
+		TriggerKill:    true,
+		SessionTTL:     paramtable.Get().CommonCfg.SessionTTL.GetAsInt64(),
+		PresetServerID: false,
 	}
 }
 
 // RegisterOption used to setup session options when register services.
-type RegisterOption func(*SessionOpt)
+type RegisterOption func(*RegisterOpt)
 
 // WithStandBy enables stand-by feature.
 func WithStandBy() RegisterOption {
-	return func(opt *SessionOpt) {
+	return func(opt *RegisterOpt) {
 		opt.StandBy = true
 	}
 }
 
-func WithTriggerKill(v bool) RegisterOption {
-	return func(opt *SessionOpt) {
-		opt.TriggerKill = v
+// WithTriggerKill enables trigger-kill feature.
+func WithTriggerKill() RegisterOption {
+	return func(opt *RegisterOpt) {
+		opt.TriggerKill = true
+	}
+}
+
+// WithExclusive sets up the exclusive options.
+func WithExclusive() RegisterOption {
+	return func(opt *RegisterOpt) {
+		opt.Exclusive = true
+	}
+}
+
+func WithPresetServerID(id int64) RegisterOption {
+	return func(opt *RegisterOpt) {
+		opt.PresetServerID = true
+		opt.ServerID = id
 	}
 }
 
