@@ -49,11 +49,11 @@ type mqMsgStream struct {
 	repackFunc   RepackFunc
 	unmarshal    UnmarshalDispatcher
 	receiveBuf   chan *MsgPack
-	closeRWMutex *sync.RWMutex
+	closeRWMutex sync.RWMutex
 	streamCancel func()
 	bufSize      int64
-	producerLock *sync.Mutex
-	consumerLock *sync.Mutex
+	producerLock sync.RWMutex
+	consumerLock sync.RWMutex
 	closed       int32
 	onceChan     sync.Once
 }
@@ -84,9 +84,6 @@ func NewMqMsgStream(ctx context.Context,
 		bufSize:      bufSize,
 		receiveBuf:   receiveBuf,
 		streamCancel: streamCancel,
-		producerLock: &sync.Mutex{},
-		consumerLock: &sync.Mutex{},
-		closeRWMutex: &sync.RWMutex{},
 		closed:       0,
 	}
 
@@ -125,6 +122,8 @@ func (ms *mqMsgStream) AsProducer(channels []string) {
 }
 
 func (ms *mqMsgStream) GetLatestMsgID(channel string) (MessageID, error) {
+	ms.consumerLock.RLock()
+	defer ms.consumerLock.RUnlock()
 	lastMsg, err := ms.consumers[channel].GetLatestMsgID()
 	if err != nil {
 		errMsg := "Failed to get latest MsgID from channel: " + channel + ", error = " + err.Error()
@@ -134,6 +133,8 @@ func (ms *mqMsgStream) GetLatestMsgID(channel string) (MessageID, error) {
 }
 
 func (ms *mqMsgStream) CheckTopicValid(channel string) error {
+	ms.consumerLock.RLock()
+	defer ms.consumerLock.RUnlock()
 	err := ms.consumers[channel].CheckTopicValid(channel)
 	if err != nil {
 		return err
@@ -141,11 +142,19 @@ func (ms *mqMsgStream) CheckTopicValid(channel string) error {
 	return nil
 }
 
+func (ms *mqMsgStream) getConsumer(channel string) (mqwrapper.Consumer, bool) {
+	ms.consumerLock.RLock()
+	defer ms.consumerLock.RUnlock()
+
+	consumer, has := ms.consumers[channel]
+	return consumer, has
+}
+
 // AsConsumerWithPosition Create consumer to receive message from channels, with initial position
 // if initial position is set to latest, last message in the channel is exclusive
 func (ms *mqMsgStream) AsConsumer(channels []string, subName string, position mqwrapper.SubscriptionInitialPosition) {
 	for _, channel := range channels {
-		if _, ok := ms.consumers[channel]; ok {
+		if _, ok := ms.getConsumer(channel); ok {
 			continue
 		}
 		fn := func() error {
@@ -182,26 +191,44 @@ func (ms *mqMsgStream) SetRepackFunc(repackFunc RepackFunc) {
 	ms.repackFunc = repackFunc
 }
 
+func (ms *mqMsgStream) producerNum() int {
+	ms.producerLock.RLock()
+	defer ms.producerLock.RUnlock()
+
+	return len(ms.producers)
+}
+
+func (ms *mqMsgStream) consumerNum() int {
+	ms.consumerLock.RLock()
+	defer ms.consumerLock.RUnlock()
+
+	return len(ms.consumers)
+}
+
 func (ms *mqMsgStream) Close() {
 	log.Info("start to close mq msg stream",
-		zap.Int("producer num", len(ms.producers)),
-		zap.Int("consumer num", len(ms.consumers)))
+		zap.Int("producerNum", ms.producerNum()),
+		zap.Int("consumerNum", ms.consumerNum()))
 	ms.streamCancel()
 	ms.closeRWMutex.Lock()
 	defer ms.closeRWMutex.Unlock()
 	if !atomic.CompareAndSwapInt32(&ms.closed, 0, 1) {
 		return
 	}
+	ms.producerLock.Lock()
 	for _, producer := range ms.producers {
 		if producer != nil {
 			producer.Close()
 		}
 	}
+	ms.producerLock.Unlock()
+	ms.consumerLock.Lock()
 	for _, consumer := range ms.consumers {
 		if consumer != nil {
 			consumer.Close()
 		}
 	}
+	ms.consumerLock.Unlock()
 
 	ms.client.Close()
 	close(ms.receiveBuf)
@@ -238,7 +265,7 @@ func (ms *mqMsgStream) Produce(msgPack *MsgPack) error {
 		log.Debug("Warning: Receive empty msgPack")
 		return nil
 	}
-	if len(ms.producers) <= 0 {
+	if ms.producerNum() == 0 {
 		return errors.New("nil producer in msg stream")
 	}
 	tsMsgs := msgPack.Msgs
@@ -412,6 +439,8 @@ func (ms *mqMsgStream) receiveMsg(consumer mqwrapper.Consumer) {
 
 func (ms *mqMsgStream) Chan() <-chan *MsgPack {
 	ms.onceChan.Do(func() {
+		ms.consumerLock.RLock()
+		defer ms.consumerLock.RUnlock()
 		for _, c := range ms.consumers {
 			go ms.receiveMsg(c)
 		}
@@ -424,7 +453,7 @@ func (ms *mqMsgStream) Chan() <-chan *MsgPack {
 // User has to ensure mq_msgstream is not closed before seek, and the seek position is already written.
 func (ms *mqMsgStream) Seek(msgPositions []*msgpb.MsgPosition) error {
 	for _, mp := range msgPositions {
-		consumer, ok := ms.consumers[mp.ChannelName]
+		consumer, ok := ms.getConsumer(mp.ChannelName)
 		if !ok {
 			return fmt.Errorf("channel %s not subscribed", mp.ChannelName)
 		}
@@ -508,7 +537,7 @@ func (ms *MqTtMsgStream) addConsumer(consumer mqwrapper.Consumer, channel string
 // AsConsumerWithPosition subscribes channels as consumer for a MsgStream and seeks to a certain position.
 func (ms *MqTtMsgStream) AsConsumer(channels []string, subName string, position mqwrapper.SubscriptionInitialPosition) {
 	for _, channel := range channels {
-		if _, ok := ms.consumers[channel]; ok {
+		if _, ok := ms.getConsumer(channel); ok {
 			continue
 		}
 		fn := func() error {
@@ -739,7 +768,7 @@ func (ms *MqTtMsgStream) Seek(msgPositions []*msgpb.MsgPosition) error {
 	var err error
 	fn := func() error {
 		var ok bool
-		consumer, ok = ms.consumers[mp.ChannelName]
+		consumer, ok = ms.getConsumer(mp.ChannelName)
 		if !ok {
 			return fmt.Errorf("please subcribe the channel, channel name =%s", mp.ChannelName)
 		}
@@ -824,6 +853,8 @@ func (ms *MqTtMsgStream) Seek(msgPositions []*msgpb.MsgPosition) error {
 
 func (ms *MqTtMsgStream) Chan() <-chan *MsgPack {
 	ms.onceChan.Do(func() {
+		ms.consumerLock.RLock()
+		defer ms.consumerLock.RUnlock()
 		if ms.consumers != nil {
 			go ms.bufMsgPackToChannel()
 		}
