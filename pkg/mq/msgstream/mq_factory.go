@@ -40,15 +40,17 @@ import (
 type PmsFactory struct {
 	dispatcherFactory ProtoUDFactory
 	// the following members must be public, so that mapstructure.Decode() can access them
-	PulsarAddress    string
-	PulsarWebAddress string
-	ReceiveBufSize   int64
-	MQBufSize        int64
-	PulsarAuthPlugin string
-	PulsarAuthParams string
-	PulsarTenant     string
-	PulsarNameSpace  string
-	RequestTimeout   time.Duration
+	PulsarAddress          string
+	PulsarWebAddress       string
+	ReceiveBufSize         int64
+	MQBufSize              int64
+	PulsarAuthPlugin       string
+	PulsarAuthParams       string
+	PulsarTenant           string
+	PulsarNameSpace        string
+	RequestTimeout         time.Duration
+	MaxConnectionPerBroker int
+	EnableAsyncSend        bool
 }
 
 func NewPmsFactory(serviceParam *paramtable.ServiceParam) *PmsFactory {
@@ -73,9 +75,10 @@ func (f *PmsFactory) NewMsgStream(ctx context.Context) (MsgStream, error) {
 		return nil, err
 	}
 	clientOpts := pulsar.ClientOptions{
-		URL:              f.PulsarAddress,
-		Authentication:   auth,
-		OperationTimeout: f.RequestTimeout,
+		URL:                     f.PulsarAddress,
+		Authentication:          auth,
+		OperationTimeout:        f.RequestTimeout,
+		MaxConnectionsPerBroker: f.MaxConnectionPerBroker,
 	}
 
 	pulsarClient, err := pulsarmqwrapper.NewClient(f.PulsarTenant, f.PulsarNameSpace, clientOpts)

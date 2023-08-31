@@ -96,7 +96,7 @@ func (pc *pulsarClient) CreateProducer(options mqwrapper.ProducerOptions) (mqwra
 	elapsed := start.ElapseSpan()
 	metrics.MsgStreamRequestLatency.WithLabelValues(metrics.CreateProducerLabel).Observe(float64(elapsed.Milliseconds()))
 	metrics.MsgStreamOpCounter.WithLabelValues(metrics.CreateProducerLabel, metrics.SuccessLabel).Inc()
-	producer := &pulsarProducer{p: pp}
+	producer := &pulsarProducer{p: pp, sendAsync: options.SendAsync}
 	return producer, nil
 }
 

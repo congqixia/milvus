@@ -97,7 +97,7 @@ func NewMqMsgStream(ctx context.Context,
 }
 
 // AsProducer create producer to send message to channels
-func (ms *mqMsgStream) AsProducer(channels []string) {
+func (ms *mqMsgStream) AsProducer(channels []string, opts ...ProducerOption) {
 	for _, channel := range channels {
 		if len(channel) == 0 {
 			log.Error("MsgStream asProducer's channel is an empty string")
@@ -105,7 +105,11 @@ func (ms *mqMsgStream) AsProducer(channels []string) {
 		}
 
 		fn := func() error {
-			pp, err := ms.client.CreateProducer(mqwrapper.ProducerOptions{Topic: channel, EnableCompression: true})
+			po := mqwrapper.ProducerOptions{Topic: channel, EnableCompression: true}
+			for _, opt := range opts {
+				opt(&po)
+			}
+			pp, err := ms.client.CreateProducer(po)
 			if err != nil {
 				return err
 			}

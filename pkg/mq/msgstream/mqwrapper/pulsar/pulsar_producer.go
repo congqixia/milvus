@@ -30,7 +30,8 @@ import (
 var _ mqwrapper.Producer = (*pulsarProducer)(nil)
 
 type pulsarProducer struct {
-	p pulsar.Producer
+	p         pulsar.Producer
+	sendAsync bool
 }
 
 // Topic returns the topic name of pulsar producer
@@ -43,7 +44,18 @@ func (pp *pulsarProducer) Send(ctx context.Context, message *mqwrapper.ProducerM
 	metrics.MsgStreamOpCounter.WithLabelValues(metrics.SendMsgLabel, metrics.TotalLabel).Inc()
 
 	ppm := &pulsar.ProducerMessage{Payload: message.Payload, Properties: message.Properties}
-	pmID, err := pp.p.Send(ctx, ppm)
+	var pmID pulsar.MessageID
+	var err error
+	if pp.sendAsync {
+		signal := make(chan struct{})
+		pp.p.SendAsync(ctx, ppm, func(id pulsar.MessageID, msg *pulsar.ProducerMessage, aerr error) {
+			pmID, err = id, aerr
+			close(signal)
+		})
+		<-signal
+	} else {
+		pmID, err = pp.p.Send(ctx, ppm)
+	}
 	if err != nil {
 		metrics.MsgStreamOpCounter.WithLabelValues(metrics.SendMsgLabel, metrics.FailLabel).Inc()
 		return &pulsarID{messageID: pmID}, err

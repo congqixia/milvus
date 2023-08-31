@@ -26,6 +26,8 @@ type ProducerOptions struct {
 	// Enable compression
 	// For Pulsar, this enables ZSTD compression with default compression level
 	EnableCompression bool
+
+	SendAsync bool
 }
 
 // ProducerMessage contains the messages of a producer

@@ -52,11 +52,23 @@ type MsgPack struct {
 // RepackFunc is a function type which used to repack message after hash by primary key
 type RepackFunc func(msgs []TsMsg, hashKeys [][]int32) (map[int32]*MsgPack, error)
 
+type producerOption struct {
+	async bool
+}
+
+type ProducerOption func(*mqwrapper.ProducerOptions)
+
+func WithAsyncProduce(v bool) ProducerOption {
+	return func(opt *mqwrapper.ProducerOptions) {
+		opt.SendAsync = v
+	}
+}
+
 // MsgStream is an interface that can be used to produce and consume message on message queue
 type MsgStream interface {
 	Close()
 
-	AsProducer(channels []string)
+	AsProducer(channels []string, opts ...ProducerOption)
 	Produce(*MsgPack) error
 	SetRepackFunc(repackFunc RepackFunc)
 	GetProduceChannels() []string
