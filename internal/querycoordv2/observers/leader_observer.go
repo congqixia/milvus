@@ -181,9 +181,10 @@ func (o *LeaderObserver) findNeedLoadedSegments(leaderView *meta.LeaderView, dis
 		existInNextTarget := o.target.GetHistoricalSegment(s.CollectionID, s.GetID(), meta.NextTarget) != nil
 
 		if !existInCurrentTarget && !existInNextTarget {
+			log.Info("skip segment due to not exist in target", zap.Int64("segmentID", s.GetID()))
 			continue
 		}
-
+		log.Info("compare version for leader view and dist", zap.Int64("distVersion", s.Version), zap.Any("leaderView", version))
 		if !ok || version.GetVersion() < s.Version { // Leader misses this segment
 			ctx := context.Background()
 			resp, err := o.broker.GetSegmentInfo(ctx, s.GetID())
