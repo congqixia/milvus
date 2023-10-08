@@ -306,6 +306,9 @@ func (s *Server) Init() error {
 	if err = s.initSession(); err != nil {
 		return err
 	}
+
+	s.logCoord.Init()
+
 	if s.enableActiveStandBy {
 		s.activateFunc = func() error {
 			log.Info("DataCoord switch from standby to active, activating")

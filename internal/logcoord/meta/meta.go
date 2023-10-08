@@ -16,17 +16,104 @@
 
 package meta
 
-import "context"
+import (
+	"context"
 
-type ChannelMeta interface {
-	Init(ctx context.Context) error
-	//pChannel
-	CreatePChannels(names ...string) error
-	ListPChannelName() []string
+	"github.com/milvus-io/milvus/internal/metastore"
+	"github.com/milvus-io/milvus/internal/proto/logpb"
+	"github.com/milvus-io/milvus/internal/types"
+)
 
-	//vChannel
+type Meta interface {
+	Init(types.RootCoordClient) error
+	// physical Channel
+	// ListPChannelName() []string
+	// AssignPChannel(name string, nodeID int64)
+
+	// virtual vhannel
 	AddVChannel(channels ...string) error
 	RemoveVChannel(channels ...string) error
-	ListVChannel() []*VirtualChannel
-	ListVChannelName() []string
+	// ListVChannelName() []string
+}
+
+type PChannelList map[string]*PhysicalChannel
+
+func (l *PChannelList) Get(channel string) *PhysicalChannel {
+	return (*l)[channel]
+}
+
+func NewPChannelList(channels []string, infos map[string]*logpb.PChannelInfo, leaseIDs map[string]uint64) PChannelList {
+	list := make(map[string]*PhysicalChannel)
+
+	for _, channel := range channels {
+		pChannel := NewPhysicalChannel(channel)
+		info, ok := infos[channel]
+		if ok {
+			pChannel.nodeID = info.GetNodeID()
+		}
+
+		leaseID, ok := leaseIDs[channel]
+		if ok {
+			pChannel.leaseID = leaseID
+		}
+		list[channel] = pChannel
+	}
+
+	return list
+}
+
+type ChannelMeta struct {
+	catalog     metastore.LogCoordCatalog
+	ChannelList PChannelList
+}
+
+func NewChannelMeta(catalog metastore.LogCoordCatalog) *ChannelMeta {
+	return &ChannelMeta{
+		catalog: catalog,
+	}
+}
+
+func (m *ChannelMeta) initPChannel(ctx context.Context, channels ...string) error {
+	infos, err := m.catalog.ListPChannelInfo(ctx)
+	if err != nil {
+		return err
+	}
+
+	leaseIDs, err := m.catalog.ListPChannelLeaseID(ctx)
+	if err != nil {
+		return err
+	}
+
+	m.ChannelList = NewPChannelList(channels, infos, leaseIDs)
+	return nil
+}
+
+func (m *ChannelMeta) Init(rc types.RootCoordClient) error {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// init pchannel info
+	pChannels := getPChannelList()
+	err := m.initPChannel(ctx, pChannels...)
+	if err != nil {
+		return err
+	}
+	// TODO RELOAD VCHANNEL NUM OF PCHNNEL
+	return nil
+}
+
+func (m *ChannelMeta) AddVChannel(channels ...string) error {
+	for _, channel := range channels {
+		pchannel := getPChannelName(channel)
+		m.ChannelList.Get(pchannel).IncRef()
+	}
+	return nil
+}
+
+func (m *ChannelMeta) RemoveVChannel(channels ...string) error {
+	for _, channel := range channels {
+		pchannel := getPChannelName(channel)
+		m.ChannelList.Get(pchannel).DecRef()
+	}
+	return nil
 }

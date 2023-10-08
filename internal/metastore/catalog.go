@@ -7,6 +7,7 @@ import (
 	"github.com/milvus-io/milvus-proto/go-api/v2/msgpb"
 	"github.com/milvus-io/milvus/internal/metastore/model"
 	"github.com/milvus-io/milvus/internal/proto/datapb"
+	"github.com/milvus-io/milvus/internal/proto/logpb"
 	"github.com/milvus-io/milvus/internal/proto/querypb"
 	"github.com/milvus-io/milvus/pkg/util/typeutil"
 )
@@ -139,20 +140,23 @@ type DataCoordCatalog interface {
 }
 
 type LogCoordCatalog interface {
-	// PChannel
-	AllocPChannel(ctx context.Context, pChannel string, nodeID uint64) error
-
-	// VChannel
+	// virtual channel info
 	MarkChannelAdded(ctx context.Context, channel string) error
 	MarkChannelDeleted(ctx context.Context, channel string) error
 	ShouldDropChannel(ctx context.Context, channel string) bool
 	ChannelExists(ctx context.Context, channel string) bool
 	DropChannel(ctx context.Context, channel string) error
 
-	//  VChannel Checkpoint
-	ListVChannelCheckpoint(ctx context.Context) (map[string]*msgpb.MsgPosition, error)
-	SaveVChannelCheckpoint(ctx context.Context, vChannel string, pos *msgpb.MsgPosition) error
-	DropVChannelCheckpoint(ctx context.Context, vChannel string) error
+	ListChannelCheckpoint(ctx context.Context) (map[string]*msgpb.MsgPosition, error)
+	SaveChannelCheckpoint(ctx context.Context, vChannel string, pos *msgpb.MsgPosition) error
+	DropChannelCheckpoint(ctx context.Context, vChannel string) error
+
+	// physical channel watch info
+	SavePChannelInfo(ctx context.Context, info *logpb.PChannelInfo) error
+	ListPChannelInfo(ctx context.Context) (map[string]*logpb.PChannelInfo, error)
+
+	SavePChannelLeaseID(ctx context.Context, pChannel string, leaseID uint64) error
+	ListPChannelLeaseID(ctx context.Context) (map[string]uint64, error)
 }
 
 type QueryCoordCatalog interface {

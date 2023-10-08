@@ -17,36 +17,44 @@
 package logcoord
 
 import (
-	"context"
 	"sync"
 
 	"github.com/milvus-io/milvus/internal/logcoord/meta"
 	"github.com/milvus-io/milvus/internal/logcoord/session"
+	"github.com/milvus-io/milvus/internal/metastore"
+	"github.com/milvus-io/milvus/internal/types"
 	"github.com/milvus-io/milvus/internal/util/sessionutil"
 	"github.com/milvus-io/milvus/pkg/mq/msgstream"
 )
 
 type Server struct {
-	meta           meta.ChannelMeta
-	sessionManager *session.SessionManager
+	meta           meta.Meta
+	rootCoord      types.RootCoordClient
 	streamFactory  msgstream.Factory
+	sessionManager *session.SessionManager
 
 	initOnce  sync.Once
 	startOnce sync.Once
 	stopOnce  sync.Once
 }
 
-func NewLogCoord(factory msgstream.Factory, etcdSession *sessionutil.Session) *Server {
+func NewLogCoord(
+	factory msgstream.Factory,
+	etcdSession *sessionutil.Session,
+	rc types.RootCoordClient,
+	catalog metastore.LogCoordCatalog) *Server {
 	return &Server{
 		streamFactory:  factory,
 		sessionManager: session.NewSessionManager(session.DefaultLogNodeConnector, etcdSession),
+		rootCoord:      rc,
+		meta:           meta.NewChannelMeta(catalog),
 	}
 }
 
-func (m *Server) Init(ctx context.Context) error {
+func (m *Server) Init() error {
 	var err error
 	m.initOnce.Do(func() {
-		err = m.meta.Init(ctx)
+		err = m.meta.Init(m.rootCoord)
 		if err != nil {
 			return
 		}
@@ -69,9 +77,17 @@ func (m *Server) Stop() {
 }
 
 func (m *Server) WatchVChannel(channels ...string) error {
-	return m.meta.AddVChannel(channels...)
+	err := m.meta.AddVChannel(channels...)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (m *Server) UnwatchVChannel(channels ...string) error {
-	return m.meta.RemoveVChannel(channels...)
+	err := m.meta.RemoveVChannel(channels...)
+	if err != nil {
+		return err
+	}
+	return nil
 }

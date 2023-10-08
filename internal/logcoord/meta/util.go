@@ -16,20 +16,38 @@
 
 package meta
 
-import "github.com/milvus-io/milvus-proto/go-api/v2/msgpb"
+import (
+	"fmt"
+	"strings"
 
-type VirtualChannel struct {
-	name            string
-	collectionID    uint64
-	createTimestamp uint64
-	startPosition   *msgpb.MsgPosition
+	"github.com/milvus-io/milvus/pkg/util/paramtable"
+)
+
+func genPChannelNames(prefix string, num int) []string {
+	var results []string
+	for idx := 0; idx < num; idx++ {
+		result := fmt.Sprintf("%s_%d", prefix, idx)
+		results = append(results, result)
+	}
+	return results
 }
 
-func NewVirtualChannel(collectionID, createTimestamp uint64, name string, startPosition *msgpb.MsgPosition) *VirtualChannel {
-	return &VirtualChannel{
-		name:            name,
-		collectionID:    collectionID,
-		createTimestamp: createTimestamp,
-		startPosition:   startPosition,
+func getPChannelList() []string {
+	params := paramtable.Get()
+
+	if params.CommonCfg.PreCreatedTopicEnabled.GetAsBool() {
+		return params.CommonCfg.TopicNames.GetAsStrings()
+	} else {
+		prefix := "rootcoord-dml"
+		num := params.RootCoordCfg.DmlChannelNum.GetAsInt()
+		return genPChannelNames(prefix, num)
 	}
+}
+
+func getPChannelName(vchannel string) string {
+	index := strings.LastIndex(vchannel, "_")
+	if index < 0 {
+		return vchannel
+	}
+	return vchannel[:index]
 }

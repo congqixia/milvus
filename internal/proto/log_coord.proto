@@ -14,6 +14,18 @@ service LogNode {
     rpc Insert(InsertRequest)returns (common.Status){};
 }
 
+enum PChannelState {
+    Unused = 0;
+    Waitting = 1;
+    Watching = 2;    
+}
+
+message PChannelInfo {
+    string name = 1;
+    PChannelState state=2;
+    int64 nodeID = 3;
+}
+
 message WatchChannelRequest{
     common.MsgBase base = 1;
     string pChannel = 2;

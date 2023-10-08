@@ -997,6 +997,11 @@ func buildFieldStatslogPathPrefix(collectionID typeutil.UniqueID, partitionID ty
 	return fmt.Sprintf("%s/%d/%d/%d", SegmentStatslogPathPrefix, collectionID, partitionID, segmentID)
 }
 
+// buildPhysicalChannelPath builds pchannel info path
+func buildPhysicalChannelPath(channel string) string {
+	return fmt.Sprintf("%s/%s", PhysicalChannelPrefix, channel)
+}
+
 // buildChannelRemovePath builds vchannel remove flag path
 func buildChannelRemovePath(channel string) string {
 	return fmt.Sprintf("%s/%s", ChannelRemovePrefix, channel)
