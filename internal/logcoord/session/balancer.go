@@ -20,6 +20,8 @@ import (
 	"context"
 	"sync"
 
+	"github.com/milvus-io/milvus/internal/logcoord/meta"
+	"github.com/milvus-io/milvus/internal/proto/logpb"
 	"github.com/milvus-io/milvus/pkg/log"
 	"github.com/milvus-io/milvus/pkg/util/retry"
 )
@@ -27,9 +29,9 @@ import (
 type SessionBalancer struct {
 	nodeAllocator  NodeAllocator
 	sessionManager *SessionManager
+	meta           meta.Meta
 
-	waittingChannels chan string
-	balanceNotify    chan struct{}
+	balanceNotify chan struct{}
 
 	wg        sync.WaitGroup
 	startOnce sync.Once
@@ -45,22 +47,22 @@ func NewSessionBalancer(sessionManager *SessionManager) *SessionBalancer {
 	}
 }
 
-func (ba *SessionBalancer) allocAll(ctx context.Context) {
-	for {
-		select {
-		case channel := <-ba.waittingChannels:
-			nodeID := ba.nodeAllocator.Alloc(channel)
-			err := retry.Do(ctx, func() error {
-				err := ba.sessionManager.AssignPChannel(ctx, channel, nodeID)
-				return err
-			}, retry.Attempts(3))
+func (ba *SessionBalancer) allocWaitting(ctx context.Context) {
+	for _, channel := range ba.meta.GetPChannelNamesBy(meta.WithState(logpb.PChannelState_Waitting)) {
+		nodeID := ba.nodeAllocator.Alloc(channel)
+		if nodeID == -1 {
+			log.Warn("no avaliable log node")
+			continue
+		}
 
-			if err != nil {
-				ba.nodeAllocator.Unalloc(channel)
-				ba.nodeAllocator.FreezeNode(nodeID)
-			}
-		default:
-			return
+		err := retry.Do(ctx, func() error {
+			err := ba.sessionManager.AssignPChannel(ctx, channel, nodeID)
+			return err
+		}, retry.Attempts(3))
+
+		if err != nil {
+			ba.nodeAllocator.Unalloc(channel)
+			ba.nodeAllocator.FreezeNode(nodeID)
 		}
 	}
 }
@@ -73,7 +75,7 @@ func (ba *SessionBalancer) balance() {
 	for {
 		select {
 		case <-ba.balanceNotify:
-			ba.allocAll(ctx)
+			ba.allocWaitting(ctx)
 			//TODO REASSIGN CHANNEL TO NOT BALANCE NODE
 		case <-ba.stopCh:
 			log.Info("close log node balancer")
@@ -86,6 +88,7 @@ func (ba *SessionBalancer) Start() {
 	ba.startOnce.Do(func() {
 		ba.wg.Add(1)
 		go ba.balance()
+		ba.Notify()
 	})
 }
 
@@ -103,12 +106,9 @@ func (ba *SessionBalancer) AddNode(nodeID int64) {
 
 func (ba *SessionBalancer) RemoveNode(nodeID int64) {
 	offlineChannels := ba.nodeAllocator.RemoveNode(nodeID)
-	ba.AddChannel(offlineChannels...)
-}
-
-func (ba *SessionBalancer) AddChannel(channels ...string) {
-	for _, channel := range channels {
-		ba.waittingChannels <- channel
+	for _, channel := range offlineChannels {
+		// TODO CTX?
+		ba.meta.UnassignPChannel(context.Background(), channel)
 	}
 	ba.Notify()
 }

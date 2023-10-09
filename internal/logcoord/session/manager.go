@@ -76,16 +76,25 @@ func (m *SessionManager) Init(meta meta.Meta) error {
 		return err
 	}
 
-	ChannelList := meta.GetPChannelList()
+	ChannelList := meta.GetPChannelNamesBy()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	for name, channel := range ChannelList {
+	// revert and verfiy watched channels
+	for _, name := range ChannelList {
+		channel := meta.GetPChannel(name)
 		if channel.GetNodeID() != -1 {
 			err := m.watchPChannel(ctx, name, channel.GetNodeID())
 			if err != nil {
 				log.Warn("Revert channel watch failed, waitting reassign", zap.String("channel", name), zap.Int64("nodeID", channel.GetNodeID()), zap.Error(err))
-				m.balancer.AddChannel()
+				err := retry.Do(ctx, func() error {
+					return meta.UnassignPChannel(ctx, name)
+				}, retry.Attempts(10), retry.Sleep(3))
+
+				if err != nil {
+					log.Error("Revert channel meta failed", zap.Error(err))
+					panic("update meta failed")
+				}
 			}
 		}
 	}
@@ -110,6 +119,7 @@ func (m *SessionManager) AddSession(nodeID int64, address string) {
 	session := NewSession(nodeID, address, m.connector)
 	m.sessions.data[nodeID] = session
 	m.balancer.AddNode(session.nodeID)
+	log.Info("add log node session", zap.Int64("nodeID", nodeID), zap.String("address", address))
 }
 
 func (m *SessionManager) RemoveSession(nodeID int64) {
@@ -118,6 +128,7 @@ func (m *SessionManager) RemoveSession(nodeID int64) {
 
 	delete(m.sessions.data, nodeID)
 	m.balancer.RemoveNode(nodeID)
+	log.Info("remove log node session", zap.Int64("nodeID", nodeID))
 }
 
 func (m *SessionManager) GetSessions(nodeID int64) *Session {

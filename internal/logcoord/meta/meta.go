@@ -22,13 +22,15 @@ import (
 	"github.com/milvus-io/milvus/internal/metastore"
 	"github.com/milvus-io/milvus/internal/proto/logpb"
 	"github.com/milvus-io/milvus/internal/types"
+	"github.com/samber/lo"
 )
 
 type Meta interface {
 	Init(types.RootCoordClient) error
 	// physical Channel
 	GetPChannel(channel string) *PhysicalChannel
-	GetPChannelList() PChannelList
+	GetPChannelNamesBy(filters ...PChannelFilter) []string
+
 	UpdateLeaseID(ctx context.Context, channel string)
 	AssignPChannel(ctx context.Context, channel string, nodeID int64) error
 	UnassignPChannel(ctx context.Context, channel string) error
@@ -39,10 +41,22 @@ type Meta interface {
 	// ListVChannelName() []string
 }
 
+type PChannelFilter func(*PhysicalChannel) bool
+
+func WithState(state logpb.PChannelState) PChannelFilter {
+	return func(c *PhysicalChannel) bool {
+		return c.CheckState(state)
+	}
+}
+
 type PChannelList map[string]*PhysicalChannel
 
 func (l *PChannelList) Get(channel string) *PhysicalChannel {
 	return (*l)[channel]
+}
+
+func (l *PChannelList) GetNames() []string {
+	return lo.Keys(*l)
 }
 
 func NewPChannelList(channels []string, infos map[string]*logpb.PChannelInfo, leaseIDs map[string]uint64) PChannelList {
@@ -113,14 +127,31 @@ func (m *ChannelMeta) AssignPChannel(ctx context.Context, channel string, nodeID
 	return m.GetPChannel(channel).Assign(ctx, nodeID)
 }
 
-func (m *ChannelMeta) UnassignPChannel(ctx context.Context, channel string, nodeID int64) error
+func (m *ChannelMeta) UnassignPChannel(ctx context.Context, channel string, nodeID int64) error {
+	return m.GetPChannel(channel).Unassign(ctx)
+}
 
 func (m *ChannelMeta) GetPChannel(channel string) *PhysicalChannel {
 	return m.channelList.Get(channel)
 }
 
-func (m *ChannelMeta) GetPChannelList() PChannelList {
-	return m.channelList
+func (m *ChannelMeta) GetPChannelNamesBy(filters ...PChannelFilter) []string {
+	channels := []string{}
+	filter := func(channel *PhysicalChannel) bool {
+		for _, filter := range filters {
+			if !filter(channel) {
+				return false
+			}
+		}
+		return true
+	}
+
+	for name, channel := range m.channelList {
+		if filter(channel) {
+			channels = append(channels, name)
+		}
+	}
+	return channels
 }
 
 func (m *ChannelMeta) AddVChannel(channels ...string) error {

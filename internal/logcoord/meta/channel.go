@@ -120,6 +120,13 @@ func (c *PhysicalChannel) GetRef() uint64 {
 	return c.refCnt
 }
 
+func (c *PhysicalChannel) CheckState(state logpb.PChannelState) bool {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	return c.status == state
+}
+
 func (c *PhysicalChannel) IncRef() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
