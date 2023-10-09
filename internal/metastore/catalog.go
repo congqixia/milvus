@@ -137,28 +137,18 @@ type DataCoordCatalog interface {
 	DropSegmentIndex(ctx context.Context, collID, partID, segID, buildID typeutil.UniqueID) error
 
 	GcConfirm(ctx context.Context, collectionID, partitionID typeutil.UniqueID) bool
-}
 
-type LogCoordCatalog interface {
-	// virtual channel info
-	MarkChannelAdded(ctx context.Context, channel string) error
-	MarkChannelDeleted(ctx context.Context, channel string) error
-	ShouldDropChannel(ctx context.Context, channel string) bool
-	ChannelExists(ctx context.Context, channel string) bool
-	DropChannel(ctx context.Context, channel string) error
+	// physical channel watch related
+	ListPChannelCheckpoint(ctx context.Context) (map[string]*msgpb.MsgPosition, error)
+	SavePChannelCheckpoint(ctx context.Context, pChannel string, pos *msgpb.MsgPosition) error
+	DropPChannelCheckpoint(ctx context.Context, pChannel string) error
 
-	ListChannelCheckpoint(ctx context.Context) (map[string]*msgpb.MsgPosition, error)
-	SaveChannelCheckpoint(ctx context.Context, vChannel string, pos *msgpb.MsgPosition) error
-	DropChannelCheckpoint(ctx context.Context, vChannel string) error
-
-	// physical channel watch info
 	SavePChannelInfo(ctx context.Context, info *logpb.PChannelInfo) error
 	ListPChannelInfo(ctx context.Context) (map[string]*logpb.PChannelInfo, error)
 
 	SavePChannelLeaseID(ctx context.Context, pChannel string, leaseID uint64) error
 	ListPChannelLeaseID(ctx context.Context) (map[string]uint64, error)
 }
-
 type QueryCoordCatalog interface {
 	SaveCollection(collection *querypb.CollectionLoadInfo, partitions ...*querypb.PartitionLoadInfo) error
 	SavePartition(info ...*querypb.PartitionLoadInfo) error

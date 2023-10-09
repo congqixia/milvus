@@ -35,6 +35,7 @@ import (
 	"github.com/milvus-io/milvus/internal/metastore/model"
 	"github.com/milvus-io/milvus/internal/proto/datapb"
 	"github.com/milvus-io/milvus/internal/proto/indexpb"
+	"github.com/milvus-io/milvus/internal/proto/logpb"
 	"github.com/milvus-io/milvus/internal/storage"
 	"github.com/milvus-io/milvus/internal/util/segmentutil"
 	"github.com/milvus-io/milvus/pkg/log"
@@ -529,47 +530,82 @@ func (kc *Catalog) DropChannelCheckpoint(ctx context.Context, vChannel string) e
 	return kc.MetaKv.Remove(k)
 }
 
-func (kc *Catalog) getBinlogsWithPrefix(binlogType storage.BinlogType, collectionID, partitionID,
-	segmentID typeutil.UniqueID,
-) ([]string, []string, error) {
-	var binlogPrefix string
-	switch binlogType {
-	case storage.InsertBinlog:
-		binlogPrefix = buildFieldBinlogPathPrefix(collectionID, partitionID, segmentID)
-	case storage.DeleteBinlog:
-		binlogPrefix = buildFieldDeltalogPathPrefix(collectionID, partitionID, segmentID)
-	case storage.StatsBinlog:
-		binlogPrefix = buildFieldStatslogPathPrefix(collectionID, partitionID, segmentID)
-	default:
-		return nil, nil, fmt.Errorf("invalid binlog type: %d", binlogType)
-	}
-	keys, values, err := kc.MetaKv.LoadWithPrefix(binlogPrefix)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return keys, values, nil
-}
-
-// unmarshal binlog/deltalog/statslog
-func (kc *Catalog) unmarshalBinlog(binlogType storage.BinlogType, collectionID, partitionID, segmentID typeutil.UniqueID) ([]*datapb.FieldBinlog, error) {
-	_, values, err := kc.getBinlogsWithPrefix(binlogType, collectionID, partitionID, segmentID)
+func (kc *Catalog) ListPChannelCheckpoint(ctx context.Context) (map[string]*msgpb.MsgPosition, error) {
+	keys, values, err := kc.MetaKv.LoadWithPrefix(ChannelCheckpointPrefix)
 	if err != nil {
 		return nil, err
 	}
 
-	result := make([]*datapb.FieldBinlog, len(values))
-	for i, value := range values {
-		fieldBinlog := &datapb.FieldBinlog{}
-		err = proto.Unmarshal([]byte(value), fieldBinlog)
+	channelCPs := make(map[string]*msgpb.MsgPosition)
+	for i, key := range keys {
+		value := values[i]
+		channelCP := &msgpb.MsgPosition{}
+		err = proto.Unmarshal([]byte(value), channelCP)
 		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal datapb.FieldBinlog: %d, err:%w", fieldBinlog.FieldID, err)
+			log.Error("unmarshal channelCP failed when ListChannelCheckpoint", zap.Error(err))
+			return nil, err
 		}
-
-		fillLogPathByLogID(kc.ChunkManagerRootPath, binlogType, collectionID, partitionID, segmentID, fieldBinlog)
-		result[i] = fieldBinlog
+		ss := strings.Split(key, "/")
+		vChannel := ss[len(ss)-1]
+		channelCPs[vChannel] = channelCP
 	}
-	return result, nil
+
+	return channelCPs, nil
+}
+
+func (kc *Catalog) SavePChannelCheckpoint(ctx context.Context, pChannel string, pos *msgpb.MsgPosition) error {
+	k := buildChannelCPKey(pChannel)
+	v, err := proto.Marshal(pos)
+	if err != nil {
+		return err
+	}
+	return kc.MetaKv.Save(k, string(v))
+}
+
+func (kc *Catalog) DropPChannelCheckpoint(ctx context.Context, pChannel string) error {
+	k := buildChannelCPKey(pChannel)
+	return kc.MetaKv.Remove(k)
+}
+
+func (kc *Catalog) SavePChannelInfo(ctx context.Context, info *logpb.PChannelInfo) error {
+	k := buildPhysicalChannelPath(info.GetName())
+	v, err := proto.Marshal(info)
+	if err != nil {
+		return err
+	}
+	return kc.MetaKv.Save(k, string(v))
+}
+
+func (kc *Catalog) ListPChannelInfo(ctx context.Context) (map[string]*logpb.PChannelInfo, error) {
+	_, values, err := kc.MetaKv.LoadWithPrefix(PChannelInfoPrefix)
+	if err != nil {
+		return nil, err
+	}
+
+	infos := make(map[string]*logpb.PChannelInfo)
+	for _, value := range values {
+		info := &logpb.PChannelInfo{}
+		err = proto.Unmarshal([]byte(value), info)
+		if err != nil {
+			log.Error("unmarshal info failed when ListPChannelInfo", zap.Error(err))
+			return nil, err
+		}
+		infos[info.GetName()] = info
+	}
+	return infos, nil
+}
+
+func (kc *Catalog) SavePChannelLeaseID(ctx context.Context, pChannel string, leaseID uint64) error {
+	k := (info.GetName())
+	v, err := proto.Marshal(info)
+	if err != nil {
+		return err
+	}
+	return kc.MetaKv.Save(k, string(v))
+}
+
+func (kc *Catalog) ListPChannelLeaseID(ctx context.Context) (map[string]uint64, error) {
+
 }
 
 func (kc *Catalog) CreateIndex(ctx context.Context, index *model.Index) error {
@@ -997,9 +1033,14 @@ func buildFieldStatslogPathPrefix(collectionID typeutil.UniqueID, partitionID ty
 	return fmt.Sprintf("%s/%d/%d/%d", SegmentStatslogPathPrefix, collectionID, partitionID, segmentID)
 }
 
+// buildPhysicalChannelLeaseIDPath builds pchannel leaseID path
+func buildPhysicalChannelLeaseIDPath(channel string) string {
+	return fmt.Sprintf("%s/%s", PChannelLeaseIDPrefix, channel)
+}
+
 // buildPhysicalChannelPath builds pchannel info path
 func buildPhysicalChannelPath(channel string) string {
-	return fmt.Sprintf("%s/%s", PhysicalChannelPrefix, channel)
+	return fmt.Sprintf("%s/%s", PChannelInfoPrefix, channel)
 }
 
 // buildChannelRemovePath builds vchannel remove flag path

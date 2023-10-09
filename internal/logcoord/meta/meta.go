@@ -63,11 +63,11 @@ func NewPChannelList(channels []string, infos map[string]*logpb.PChannelInfo, le
 }
 
 type ChannelMeta struct {
-	catalog     metastore.LogCoordCatalog
+	catalog     metastore.DataCoordCatalog
 	ChannelList PChannelList
 }
 
-func NewChannelMeta(catalog metastore.LogCoordCatalog) *ChannelMeta {
+func NewChannelMeta(catalog metastore.DataCoordCatalog) *ChannelMeta {
 	return &ChannelMeta{
 		catalog: catalog,
 	}
