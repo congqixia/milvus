@@ -17,14 +17,19 @@
 package meta
 
 import (
+	"context"
 	"sync"
 
+	"github.com/milvus-io/milvus/internal/metastore"
 	"github.com/milvus-io/milvus/internal/proto/logpb"
+	"github.com/milvus-io/milvus/pkg/log"
+	"go.uber.org/zap"
 )
 
 type PhysicalChannel struct {
-	name   string
-	status logpb.PChannelState
+	catalog metastore.DataCoordCatalog
+	name    string
+	status  logpb.PChannelState
 
 	nodeID  int64
 	leaseID uint64
@@ -43,11 +48,55 @@ func NewPhysicalChannel(name string) *PhysicalChannel {
 	}
 }
 
-func (c *PhysicalChannel) SetNodeID(nodeID int64) {
+func (c *PhysicalChannel) Assign(ctx context.Context, nodeID int64) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	err := c.catalog.SavePChannelInfo(ctx, &logpb.PChannelInfo{
+		Name:   c.name,
+		NodeID: nodeID,
+		State:  logpb.PChannelState_Watching,
+	})
+	if err != nil {
+		log.Warn("assign pchannel update etcd channel info failed", zap.String("channel", c.name), zap.Error(err))
+		return err
+	}
+
 	c.nodeID = nodeID
+	c.status = logpb.PChannelState_Watching
+	return nil
+}
+
+func (c *PhysicalChannel) Unassign(ctx context.Context) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	err := c.catalog.SavePChannelInfo(ctx, &logpb.PChannelInfo{
+		Name:   c.name,
+		NodeID: -1,
+		State:  logpb.PChannelState_Waitting,
+	})
+	if err != nil {
+		log.Warn("assign pchannel update etcd channel info failed", zap.String("channel", c.name), zap.Error(err))
+		return err
+	}
+
+	c.nodeID = -1
+	c.status = logpb.PChannelState_Waitting
+	return nil
+}
+
+func (c *PhysicalChannel) UpdateLeaseID(ctx context.Context) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	err := c.catalog.SavePChannelLeaseID(ctx, c.name, c.leaseID+1)
+	if err != nil {
+		log.Warn("pchannel update etcd channel leaseID failed", zap.String("channel", c.name), zap.Error(err))
+		return err
+	}
+	c.leaseID = c.leaseID + 1
+	return nil
 }
 
 func (c *PhysicalChannel) GetNodeID() int64 {
@@ -57,18 +106,18 @@ func (c *PhysicalChannel) GetNodeID() int64 {
 	return c.nodeID
 }
 
-func (c *PhysicalChannel) SetLeaseID(leaseID uint64) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	c.leaseID = leaseID
-}
-
 func (c *PhysicalChannel) GetLeaseID() uint64 {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
 	return c.leaseID
+}
+
+func (c *PhysicalChannel) GetRef() uint64 {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	return c.refCnt
 }
 
 func (c *PhysicalChannel) IncRef() {
@@ -90,19 +139,3 @@ func (c *PhysicalChannel) IsUsed() bool {
 
 	return c.refCnt > 0
 }
-
-// type VirtualChannel struct {
-// 	name            string
-// 	collectionID    uint64
-// 	createTimestamp uint64
-// 	startPosition   *msgpb.MsgPosition
-// }
-
-// func NewVirtualChannel(collectionID, createTimestamp uint64, name string, startPosition *msgpb.MsgPosition) *VirtualChannel {
-// 	return &VirtualChannel{
-// 		name:            name,
-// 		collectionID:    collectionID,
-// 		createTimestamp: createTimestamp,
-// 		startPosition:   startPosition,
-// 	}
-// }

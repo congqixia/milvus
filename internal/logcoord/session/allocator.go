@@ -20,7 +20,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/milvus-io/milvus/internal/logcoord/meta"
 	"github.com/milvus-io/milvus/pkg/log"
+	"github.com/samber/lo"
 	"go.uber.org/zap"
 )
 
@@ -42,39 +44,42 @@ const FreezeInterval = 10 * time.Second
 
 type NodeInfo struct {
 	// pChannel list
-	channelList []string
+	channelList map[string]*meta.PhysicalChannel
 	FreezeTime  time.Time
+	meta        meta.Meta
 }
 
-func (i *NodeInfo) RemoveChannel(target string) {
-	targetID := -1
-	for id, channel := range i.channelList {
-		if channel == target {
-			targetID = id
-			break
-		}
+func NewNodeInfo() *NodeInfo {
+	return &NodeInfo{
+		channelList: make(map[string]*meta.PhysicalChannel),
 	}
-	if targetID != -1 {
-		i.channelList = append(i.channelList[:targetID], i.channelList[targetID+1:]...)
-	}
+}
+
+func (i *NodeInfo) RemoveChannel(channel string) {
+	delete(i.channelList, channel)
 }
 
 func (i *NodeInfo) GetChannelNum() int64 {
 	return int64(len(i.channelList))
 }
 
+func (i *NodeInfo) GetChannelNames() []string {
+	return lo.Keys(i.channelList)
+}
+
 func (i *NodeInfo) AddChannel(channel string) {
-	i.channelList = append(i.channelList, channel)
+	if _, ok := i.channelList[channel]; !ok {
+		i.channelList[channel] = i.meta.GetPChannel(channel)
+	}
 }
 
 func (i *NodeInfo) PopChannel() string {
-	target_channel := i.channelList[0]
-	i.channelList = i.channelList[1:]
-	return target_channel
-}
+	for name, _ := range i.channelList {
+		delete(i.channelList, name)
+		return name
+	}
 
-func (i *NodeInfo) GetChannels() []string {
-	return i.channelList
+	return ""
 }
 
 func (i *NodeInfo) IsFrozen() bool {
@@ -112,7 +117,7 @@ func (allocator *UniformNodeAllocator) RemoveNode(nodeID int64) []string {
 		log.Info("Remove log node but not reassign all pchannel", zap.Int64("nodeID", nodeID))
 	}
 	delete(allocator.nodeInfos, nodeID)
-	return info.GetChannels()
+	return info.GetChannelNames()
 }
 
 func (allocator *UniformNodeAllocator) FreezeNode(nodeID int64) {
@@ -199,11 +204,5 @@ func NewUniformNodeAllocator() *UniformNodeAllocator {
 	return &UniformNodeAllocator{
 		nodeInfos:   make(map[int64]*NodeInfo),
 		nodeMapping: make(map[string]int64),
-	}
-}
-
-func NewNodeInfo() *NodeInfo {
-	return &NodeInfo{
-		channelList: []string{},
 	}
 }

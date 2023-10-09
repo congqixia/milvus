@@ -568,7 +568,7 @@ func (kc *Catalog) DropPChannelCheckpoint(ctx context.Context, pChannel string) 
 }
 
 func (kc *Catalog) SavePChannelInfo(ctx context.Context, info *logpb.PChannelInfo) error {
-	k := buildPhysicalChannelPath(info.GetName())
+	k := buildPChannelInfoPath(info.GetName())
 	v, err := proto.Marshal(info)
 	if err != nil {
 		return err
@@ -595,17 +595,30 @@ func (kc *Catalog) ListPChannelInfo(ctx context.Context) (map[string]*logpb.PCha
 	return infos, nil
 }
 
-func (kc *Catalog) SavePChannelLeaseID(ctx context.Context, pChannel string, leaseID uint64) error {
-	k := (info.GetName())
-	v, err := proto.Marshal(info)
-	if err != nil {
-		return err
-	}
-	return kc.MetaKv.Save(k, string(v))
+func (kc *Catalog) SavePChannelLeaseID(ctx context.Context, channel string, leaseID uint64) error {
+	return kc.MetaKv.Save(buildPChannelInfoPath(channel), fmt.Sprint(leaseID))
 }
 
 func (kc *Catalog) ListPChannelLeaseID(ctx context.Context) (map[string]uint64, error) {
+	keys, values, err := kc.MetaKv.LoadWithPrefix(PChannelLeaseIDPrefix)
+	if err != nil {
+		return nil, err
+	}
 
+	leaseIDs := make(map[string]uint64)
+	for i, key := range keys {
+		ss := strings.Split(key, "/")
+		pChannel := ss[len(ss)-1]
+
+		leaseID, err := strconv.ParseUint(values[i], 10, 0)
+		if err != nil {
+			log.Error("unmarshal leaseID failed when ListPChannelLeaseID", zap.Error(err))
+			return nil, err
+		}
+		leaseIDs[pChannel] = leaseID
+	}
+
+	return leaseIDs, nil
 }
 
 func (kc *Catalog) CreateIndex(ctx context.Context, index *model.Index) error {
@@ -1033,13 +1046,13 @@ func buildFieldStatslogPathPrefix(collectionID typeutil.UniqueID, partitionID ty
 	return fmt.Sprintf("%s/%d/%d/%d", SegmentStatslogPathPrefix, collectionID, partitionID, segmentID)
 }
 
-// buildPhysicalChannelLeaseIDPath builds pchannel leaseID path
-func buildPhysicalChannelLeaseIDPath(channel string) string {
+// buildPChannelLeaseIDPath builds physical channel leaseID path
+func buildPChannelLeaseIDPath(channel string) string {
 	return fmt.Sprintf("%s/%s", PChannelLeaseIDPrefix, channel)
 }
 
-// buildPhysicalChannelPath builds pchannel info path
-func buildPhysicalChannelPath(channel string) string {
+// buildPChannelPath builds physical channel info path
+func buildPChannelInfoPath(channel string) string {
 	return fmt.Sprintf("%s/%s", PChannelInfoPrefix, channel)
 }
 

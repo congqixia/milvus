@@ -22,8 +22,7 @@ import (
 
 	"github.com/milvus-io/milvus-proto/go-api/v2/commonpb"
 	"github.com/milvus-io/milvus/internal/proto/logpb"
-	"github.com/milvus-io/milvus/internal/util"
-	"github.com/milvus-io/milvus/pkg/common"
+
 	"github.com/milvus-io/milvus/pkg/log"
 	"github.com/milvus-io/milvus/pkg/mq/msgstream"
 	"github.com/milvus-io/milvus/pkg/util/commonpbutil"
@@ -44,16 +43,16 @@ func (node *LogNode) WatchChannel(ctx context.Context, req *logpb.WatchChannelRe
 	}
 	defer node.lifetime.Done()
 
-	if !CheckTargetID(req) {
-		targetID := req.GetBase().GetTargetID()
+	err := merr.CheckTargetID(req.GetBase())
+	if err != nil {
 		log.Warn("target ID not match",
-			zap.Int64("targetID", targetID),
+			zap.Int64("targetID", req.GetBase().GetTargetID()),
 			zap.Int64("nodeID", paramtable.GetNodeID()),
 		)
-		return util.WrapStatus(commonpb.ErrorCode_NodeIDNotMatch, common.WrapNodeIDNotMatchMsg(targetID, paramtable.GetNodeID())), nil
+		return merr.Status(err), nil
 	}
 
-	err := node.loggerManager.AddLogger(ctx, req.GetPChannel())
+	err = node.loggerManager.AddLogger(ctx, req.GetPChannel())
 	return merr.Status(err), nil
 }
 
@@ -69,19 +68,19 @@ func (node *LogNode) Insert(ctx context.Context, req *logpb.InsertRequest) (*com
 	}
 	defer node.lifetime.Done()
 
-	if !CheckTargetID(req) {
-		targetID := req.GetBase().GetTargetID()
+	err := merr.CheckTargetID(req.GetBase())
+	if err != nil {
 		log.Warn("target ID not match",
-			zap.Int64("targetID", targetID),
+			zap.Int64("targetID", req.GetBase().GetTargetID()),
 			zap.Int64("nodeID", paramtable.GetNodeID()),
 		)
-		return util.WrapStatus(commonpb.ErrorCode_NodeIDNotMatch, common.WrapNodeIDNotMatchMsg(targetID, paramtable.GetNodeID())), nil
+		return merr.Status(err), nil
 	}
 
 	msg := &msgstream.InsertMsg{
 		BaseMsg:       msgstream.BaseMsg{},
 		InsertRequest: *req.Msg,
 	}
-	err := node.loggerManager.Produce(ctx, req.VChannels[0], msg)
+	err = node.loggerManager.Produce(ctx, req.VChannels[0], msg)
 	return merr.Status(err), nil
 }

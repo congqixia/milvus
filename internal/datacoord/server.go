@@ -120,7 +120,7 @@ type Server struct {
 	garbageCollector *garbageCollector
 	gcOpt            GcOption
 	handler          Handler
-	logCoord         logcoord.Server
+	logCoord         *logcoord.Server
 
 	compactionTrigger trigger
 	compactionHandler compactionPlanContext
@@ -221,6 +221,7 @@ func CreateServer(ctx context.Context, factory dependency.Factory, opts ...Optio
 		helper:                 defaultServerHelper(),
 		metricsCacheManager:    metricsinfo.NewMetricsCacheManager(),
 		enableActiveStandBy:    Params.DataCoordCfg.EnableActiveStandby.GetAsBool(),
+		logCoord:               logcoord.NewLogCoord(factory),
 	}
 
 	for _, opt := range opts {
@@ -307,8 +308,6 @@ func (s *Server) Init() error {
 		return err
 	}
 
-	s.logCoord.Init()
-
 	if s.enableActiveStandBy {
 		s.activateFunc = func() error {
 			log.Info("DataCoord switch from standby to active, activating")
@@ -343,6 +342,10 @@ func (s *Server) initDataCoord() error {
 	}
 
 	if err = s.initMeta(storageCli); err != nil {
+		return err
+	}
+
+	if err = s.logCoord.Init(s.session, s.meta.catalog); err != nil {
 		return err
 	}
 
@@ -399,6 +402,7 @@ func (s *Server) startDataCoord() {
 		s.compactionTrigger.start()
 	}
 	s.startServerLoop()
+	s.logCoord.Start()
 	// DataCoord (re)starts successfully and starts to collection segment stats
 	// data from all DataNode.
 	// This will prevent DataCoord from missing out any important segment stats
@@ -1041,6 +1045,7 @@ func (s *Server) Stop() error {
 		s.stopCompactionHandler()
 	}
 	s.indexBuilder.Stop()
+	s.logCoord.Stop()
 
 	if s.session != nil {
 		s.session.Stop()

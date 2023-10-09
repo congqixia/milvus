@@ -146,7 +146,7 @@ type DataCoordCatalog interface {
 	SavePChannelInfo(ctx context.Context, info *logpb.PChannelInfo) error
 	ListPChannelInfo(ctx context.Context) (map[string]*logpb.PChannelInfo, error)
 
-	SavePChannelLeaseID(ctx context.Context, pChannel string, leaseID uint64) error
+	SavePChannelLeaseID(ctx context.Context, channel string, leaseID uint64) error
 	ListPChannelLeaseID(ctx context.Context) (map[string]uint64, error)
 }
 type QueryCoordCatalog interface {

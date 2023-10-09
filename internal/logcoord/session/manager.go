@@ -17,9 +17,18 @@
 package session
 
 import (
+	"context"
+	"fmt"
 	"sync"
+	"time"
 
+	"github.com/milvus-io/milvus/internal/logcoord/meta"
+	"github.com/milvus-io/milvus/internal/proto/logpb"
 	"github.com/milvus-io/milvus/internal/util/sessionutil"
+	"github.com/milvus-io/milvus/pkg/log"
+	"github.com/milvus-io/milvus/pkg/util/merr"
+	"github.com/milvus-io/milvus/pkg/util/retry"
+	"go.uber.org/zap"
 )
 
 // SessionManager manger all lognode session
@@ -41,6 +50,7 @@ type SessionManager struct {
 		data map[int64]*Session
 	}
 
+	meta      meta.Meta
 	connector SessionConnector
 	balancer  *SessionBalancer
 	observer  *SessionObserver
@@ -60,10 +70,24 @@ func NewSessionManager(connector SessionConnector, etcdSession *sessionutil.Sess
 	return manager
 }
 
-func (m *SessionManager) Init() error {
+func (m *SessionManager) Init(meta meta.Meta) error {
 	err := m.observer.Init()
 	if err != nil {
 		return err
+	}
+
+	ChannelList := meta.GetPChannelList()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	for name, channel := range ChannelList {
+		if channel.GetNodeID() != -1 {
+			err := m.watchPChannel(ctx, name, channel.GetNodeID())
+			if err != nil {
+				log.Warn("Revert channel watch failed, waitting reassign", zap.String("channel", name), zap.Int64("nodeID", channel.GetNodeID()), zap.Error(err))
+				m.balancer.AddChannel()
+			}
+		}
 	}
 
 	return nil
@@ -106,3 +130,45 @@ func (m *SessionManager) GetSessions(nodeID int64) *Session {
 	}
 	return session
 }
+
+func (m *SessionManager) watchPChannel(ctx context.Context, channel string, nodeID int64) error {
+	session := m.GetSessions(nodeID)
+	if session == nil {
+		log.Warn("Session relased, but not remove from log node balancer", zap.Int64("nodeID", nodeID))
+		return fmt.Errorf("alloc a relased node")
+	}
+	client := session.GetClient(ctx)
+
+	resp, err := client.WatchChannel(ctx, &logpb.WatchChannelRequest{
+		PChannel: channel,
+	})
+	if err != nil {
+		return err
+	}
+
+	return merr.Error(resp)
+}
+
+func (m *SessionManager) AssignPChannel(ctx context.Context, channel string, nodeID int64) error {
+	err := m.meta.AssignPChannel(ctx, channel, nodeID)
+	if err != nil {
+		return err
+	}
+
+	err = m.watchPChannel(ctx, channel, nodeID)
+	if err != nil {
+		return err
+	}
+
+	err = retry.Do(ctx, func() error {
+		return m.meta.AssignPChannel(ctx, channel, nodeID)
+	}, retry.Attempts(10), retry.Sleep(3*time.Second))
+	if err != nil {
+		log.Error("etcd disconnect, write watch success meta failed", zap.String("channel", channel))
+		panic(err)
+	}
+
+	return nil
+}
+
+// func (m *SessionManager) UnassignPChannel(ctx context.Context, channel string) error

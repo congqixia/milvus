@@ -27,8 +27,11 @@ import (
 type Meta interface {
 	Init(types.RootCoordClient) error
 	// physical Channel
-	// ListPChannelName() []string
-	// AssignPChannel(name string, nodeID int64)
+	GetPChannel(channel string) *PhysicalChannel
+	GetPChannelList() PChannelList
+	UpdateLeaseID(ctx context.Context, channel string)
+	AssignPChannel(ctx context.Context, channel string, nodeID int64) error
+	UnassignPChannel(ctx context.Context, channel string) error
 
 	// virtual vhannel
 	AddVChannel(channels ...string) error
@@ -64,7 +67,7 @@ func NewPChannelList(channels []string, infos map[string]*logpb.PChannelInfo, le
 
 type ChannelMeta struct {
 	catalog     metastore.DataCoordCatalog
-	ChannelList PChannelList
+	channelList PChannelList
 }
 
 func NewChannelMeta(catalog metastore.DataCoordCatalog) *ChannelMeta {
@@ -84,7 +87,7 @@ func (m *ChannelMeta) initPChannel(ctx context.Context, channels ...string) erro
 		return err
 	}
 
-	m.ChannelList = NewPChannelList(channels, infos, leaseIDs)
+	m.channelList = NewPChannelList(channels, infos, leaseIDs)
 	return nil
 }
 
@@ -102,10 +105,28 @@ func (m *ChannelMeta) Init(rc types.RootCoordClient) error {
 	return nil
 }
 
+func (m *ChannelMeta) UpdateLeaseID(ctx context.Context, channel string) error {
+	return m.GetPChannel(channel).UpdateLeaseID(ctx)
+}
+
+func (m *ChannelMeta) AssignPChannel(ctx context.Context, channel string, nodeID int64) error {
+	return m.GetPChannel(channel).Assign(ctx, nodeID)
+}
+
+func (m *ChannelMeta) UnassignPChannel(ctx context.Context, channel string, nodeID int64) error
+
+func (m *ChannelMeta) GetPChannel(channel string) *PhysicalChannel {
+	return m.channelList.Get(channel)
+}
+
+func (m *ChannelMeta) GetPChannelList() PChannelList {
+	return m.channelList
+}
+
 func (m *ChannelMeta) AddVChannel(channels ...string) error {
 	for _, channel := range channels {
 		pchannel := getPChannelName(channel)
-		m.ChannelList.Get(pchannel).IncRef()
+		m.channelList.Get(pchannel).IncRef()
 	}
 	return nil
 }
@@ -113,7 +134,7 @@ func (m *ChannelMeta) AddVChannel(channels ...string) error {
 func (m *ChannelMeta) RemoveVChannel(channels ...string) error {
 	for _, channel := range channels {
 		pchannel := getPChannelName(channel)
-		m.ChannelList.Get(pchannel).DecRef()
+		m.channelList.Get(pchannel).DecRef()
 	}
 	return nil
 }

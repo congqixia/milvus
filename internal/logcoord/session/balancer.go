@@ -18,14 +18,10 @@ package session
 
 import (
 	"context"
-	"fmt"
 	"sync"
 
-	"github.com/milvus-io/milvus/internal/proto/logpb"
 	"github.com/milvus-io/milvus/pkg/log"
-	"github.com/milvus-io/milvus/pkg/util/merr"
 	"github.com/milvus-io/milvus/pkg/util/retry"
-	"go.uber.org/zap"
 )
 
 type SessionBalancer struct {
@@ -49,35 +45,13 @@ func NewSessionBalancer(sessionManager *SessionManager) *SessionBalancer {
 	}
 }
 
-func (ba *SessionBalancer) alloc(ctx context.Context, channel string, nodeID int64) error {
-	session := ba.sessionManager.GetSessions(nodeID)
-	if session == nil {
-		log.Warn("Session relased, but not remove from log node balancer", zap.Int64("nodeID", nodeID))
-		return fmt.Errorf("alloc a relased node")
-	}
-
-	client := session.GetClient(ctx)
-	resp, err := client.WatchChannel(ctx, &logpb.WatchChannelRequest{
-		PChannel: channel,
-	})
-	if err != nil {
-		return err
-	}
-
-	err = merr.Error(resp)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 func (ba *SessionBalancer) allocAll(ctx context.Context) {
 	for {
 		select {
 		case channel := <-ba.waittingChannels:
 			nodeID := ba.nodeAllocator.Alloc(channel)
 			err := retry.Do(ctx, func() error {
-				err := ba.alloc(ctx, channel, nodeID)
+				err := ba.sessionManager.AssignPChannel(ctx, channel, nodeID)
 				return err
 			}, retry.Attempts(3))
 

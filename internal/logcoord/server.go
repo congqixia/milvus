@@ -24,6 +24,7 @@ import (
 	"github.com/milvus-io/milvus/internal/metastore"
 	"github.com/milvus-io/milvus/internal/types"
 	"github.com/milvus-io/milvus/internal/util/sessionutil"
+	"github.com/milvus-io/milvus/pkg/log"
 	"github.com/milvus-io/milvus/pkg/mq/msgstream"
 )
 
@@ -38,28 +39,25 @@ type Server struct {
 	stopOnce  sync.Once
 }
 
-func NewLogCoord(
-	factory msgstream.Factory,
-	etcdSession *sessionutil.Session,
-	rc types.RootCoordClient,
-	catalog metastore.LogCoordCatalog) *Server {
-	return &Server{
-		streamFactory:  factory,
-		sessionManager: session.NewSessionManager(session.DefaultLogNodeConnector, etcdSession),
-		rootCoord:      rc,
-		meta:           meta.NewChannelMeta(catalog),
-	}
+func NewLogCoord(factory msgstream.Factory) *Server {
+	return &Server{streamFactory: factory}
 }
 
-func (m *Server) Init() error {
+func (m *Server) Init(etcdSession *sessionutil.Session, catalog metastore.DataCoordCatalog) error {
 	var err error
 	m.initOnce.Do(func() {
+		m.sessionManager = session.NewSessionManager(session.DefaultLogNodeConnector, etcdSession)
+
 		err = m.meta.Init(m.rootCoord)
 		if err != nil {
 			return
 		}
 
-		err = m.sessionManager.Init()
+		err = m.sessionManager.Init(m.meta)
+		if err != nil {
+			return
+		}
+		log.Info("log coord init success")
 	})
 	return err
 }
