@@ -68,13 +68,13 @@ func (m *LoggerManager) AddLogger(ctx context.Context, pChannel string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	logger, ok := m.loggers[pChannel]
-	if !ok {
-		m.loggers[pChannel] = NewWriteAheadLogger(pChannel)
+	if _, ok := m.loggers[pChannel]; !ok {
+		logger := NewWriteAheadLogger(pChannel)
 		err := logger.Init(ctx, m.factory)
 		if err != nil {
 			return err
 		}
+		m.loggers[pChannel] = logger
 	}
 	return nil
 }

@@ -49,3 +49,6 @@ nohup ./bin/milvus run indexcoord > /tmp/indexcoord.log 2>&1 &
 
 echo "Starting indexnode..."
 nohup ./bin/milvus run indexnode > /tmp/indexnode.log 2>&1 &
+
+echo "Starting lognode..."
+nohup ./bin/milvus run lognode > /tmp/lognode.log 2>&1 &

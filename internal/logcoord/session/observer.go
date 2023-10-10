@@ -48,7 +48,7 @@ func NewSessionObserver(manager *SessionManager, session *sessionutil.Session) *
 
 func (ob *SessionObserver) Init() error {
 	r := semver.MustParseRange(">=2.2.3")
-	sessions, rev, err := ob.session.GetSessionsWithVersionRange(typeutil.DataNodeRole, r)
+	sessions, rev, err := ob.session.GetSessionsWithVersionRange(typeutil.LogNodeRole, r)
 	if err != nil {
 		log.Warn("LogCoord failed to init service discovery", zap.Error(err))
 		return err
@@ -58,7 +58,7 @@ func (ob *SessionObserver) Init() error {
 		ob.manager.AddSession(session.ServerID, session.Address)
 	}
 
-	ob.eventCh = ob.session.WatchServicesWithVersionRange(typeutil.DataNodeRole, r, rev+1, nil)
+	ob.eventCh = ob.session.WatchServicesWithVersionRange(typeutil.LogNodeRole, r, rev+1, nil)
 	return nil
 }
 

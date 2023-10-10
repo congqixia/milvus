@@ -24,6 +24,7 @@ import (
 	"github.com/milvus-io/milvus/internal/proto/logpb"
 	"github.com/milvus-io/milvus/pkg/log"
 	"github.com/milvus-io/milvus/pkg/util/retry"
+	"go.uber.org/zap"
 )
 
 type SessionBalancer struct {
@@ -39,20 +40,25 @@ type SessionBalancer struct {
 	stopCh    chan struct{}
 }
 
-func NewSessionBalancer(sessionManager *SessionManager) *SessionBalancer {
-	nodeAllocator := NewUniformNodeAllocator()
+func NewSessionBalancer(sessionManager *SessionManager, meta meta.Meta) *SessionBalancer {
+	nodeAllocator := NewUniformNodeAllocator(meta)
 	return &SessionBalancer{
+		meta:           meta,
 		nodeAllocator:  nodeAllocator,
 		sessionManager: sessionManager,
+		balanceNotify:  make(chan struct{}, 1),
+		stopCh:         make(chan struct{}),
 	}
 }
 
 func (ba *SessionBalancer) allocWaitting(ctx context.Context) {
-	for _, channel := range ba.meta.GetPChannelNamesBy(meta.WithState(logpb.PChannelState_Waitting)) {
+	channels := ba.meta.GetPChannelNamesBy(meta.WithState(logpb.PChannelState_Waitting))
+	log.Info("alloc lognode for waitting pchannels", zap.Strings("channels", channels))
+	for _, channel := range channels {
 		nodeID := ba.nodeAllocator.Alloc(channel)
 		if nodeID == -1 {
 			log.Warn("no avaliable log node")
-			continue
+			return
 		}
 
 		err := retry.Do(ctx, func() error {
@@ -70,6 +76,7 @@ func (ba *SessionBalancer) allocWaitting(ctx context.Context) {
 func (ba *SessionBalancer) balance() {
 	defer ba.wg.Done()
 
+	log.Info("start log node balancer loop")
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	for {

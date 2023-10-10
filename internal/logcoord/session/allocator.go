@@ -46,7 +46,6 @@ type NodeInfo struct {
 	// pChannel list
 	channelList map[string]*meta.PhysicalChannel
 	FreezeTime  time.Time
-	meta        meta.Meta
 }
 
 func NewNodeInfo() *NodeInfo {
@@ -67,14 +66,14 @@ func (i *NodeInfo) GetChannelNames() []string {
 	return lo.Keys(i.channelList)
 }
 
-func (i *NodeInfo) AddChannel(channel string) {
-	if _, ok := i.channelList[channel]; !ok {
-		i.channelList[channel] = i.meta.GetPChannel(channel)
+func (i *NodeInfo) AddChannel(name string, channel *meta.PhysicalChannel) {
+	if _, ok := i.channelList[name]; !ok {
+		i.channelList[name] = channel
 	}
 }
 
 func (i *NodeInfo) PopChannel() string {
-	for name, _ := range i.channelList {
+	for name := range i.channelList {
 		delete(i.channelList, name)
 		return name
 	}
@@ -87,6 +86,7 @@ func (i *NodeInfo) IsFrozen() bool {
 }
 
 type UniformNodeAllocator struct {
+	meta meta.Meta
 	// nodeID -> NodeInfo
 	nodeInfos map[int64]*NodeInfo
 	// pChannel -> nodeID
@@ -169,8 +169,10 @@ func (allocator *UniformNodeAllocator) Alloc(pChannel string) int64 {
 	defer allocator.mu.Unlock()
 
 	minNode, _ := allocator.selectMinNode()
-	allocator.nodeInfos[minNode].AddChannel(pChannel)
-	allocator.nodeMapping[pChannel] = minNode
+	if minNode != -1 {
+		allocator.nodeInfos[minNode].AddChannel(pChannel, allocator.meta.GetPChannel(pChannel))
+		allocator.nodeMapping[pChannel] = minNode
+	}
 	return minNode
 }
 
@@ -200,9 +202,10 @@ func (allocator *UniformNodeAllocator) Realloc() (string, int64, int64) {
 	return target_channel, maxNode, minNode
 }
 
-func NewUniformNodeAllocator() *UniformNodeAllocator {
+func NewUniformNodeAllocator(meta meta.Meta) *UniformNodeAllocator {
 	return &UniformNodeAllocator{
 		nodeInfos:   make(map[int64]*NodeInfo),
 		nodeMapping: make(map[string]int64),
+		meta:        meta,
 	}
 }

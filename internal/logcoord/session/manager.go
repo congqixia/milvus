@@ -26,7 +26,9 @@ import (
 	"github.com/milvus-io/milvus/internal/proto/logpb"
 	"github.com/milvus-io/milvus/internal/util/sessionutil"
 	"github.com/milvus-io/milvus/pkg/log"
+	"github.com/milvus-io/milvus/pkg/util/commonpbutil"
 	"github.com/milvus-io/milvus/pkg/util/merr"
+	"github.com/milvus-io/milvus/pkg/util/paramtable"
 	"github.com/milvus-io/milvus/pkg/util/retry"
 	"go.uber.org/zap"
 )
@@ -56,39 +58,40 @@ type SessionManager struct {
 	observer  *SessionObserver
 }
 
-func NewSessionManager(connector SessionConnector, etcdSession *sessionutil.Session) *SessionManager {
+func NewSessionManager(connector SessionConnector, etcdSession *sessionutil.Session, meta meta.Meta) *SessionManager {
 	manager := &SessionManager{
 		sessions: struct {
 			sync.RWMutex
 			data map[int64]*Session
 		}{data: make(map[int64]*Session)},
 		connector: connector,
+		meta:      meta,
 	}
 	manager.observer = NewSessionObserver(manager, etcdSession)
-	manager.balancer = NewSessionBalancer(manager)
+	manager.balancer = NewSessionBalancer(manager, meta)
 
 	return manager
 }
 
-func (m *SessionManager) Init(meta meta.Meta) error {
+func (m *SessionManager) Init() error {
 	err := m.observer.Init()
 	if err != nil {
 		return err
 	}
 
-	ChannelList := meta.GetPChannelNamesBy()
+	ChannelList := m.meta.GetPChannelNamesBy()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	// revert and verfiy watched channels
 	for _, name := range ChannelList {
-		channel := meta.GetPChannel(name)
+		channel := m.meta.GetPChannel(name)
 		if channel.GetNodeID() != -1 {
 			err := m.watchPChannel(ctx, name, channel.GetNodeID())
 			if err != nil {
 				log.Warn("Revert channel watch failed, waitting reassign", zap.String("channel", name), zap.Int64("nodeID", channel.GetNodeID()), zap.Error(err))
 				err := retry.Do(ctx, func() error {
-					return meta.UnassignPChannel(ctx, name)
+					return m.meta.UnassignPChannel(ctx, name)
 				}, retry.Attempts(10), retry.Sleep(3))
 
 				if err != nil {
@@ -151,9 +154,14 @@ func (m *SessionManager) watchPChannel(ctx context.Context, channel string, node
 	client := session.GetClient(ctx)
 
 	resp, err := client.WatchChannel(ctx, &logpb.WatchChannelRequest{
+		Base: commonpbutil.NewMsgBase(
+			commonpbutil.WithSourceID(paramtable.GetNodeID()),
+			commonpbutil.WithTargetID(nodeID),
+		),
 		PChannel: channel,
 	})
 	if err != nil {
+		log.Warn("watch channel failed", zap.String("channel", channel), zap.Int64("nodeID", nodeID))
 		return err
 	}
 

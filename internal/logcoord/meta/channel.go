@@ -39,11 +39,12 @@ type PhysicalChannel struct {
 	mu sync.RWMutex
 }
 
-func NewPhysicalChannel(name string) *PhysicalChannel {
+func NewPhysicalChannel(name string, catalog metastore.DataCoordCatalog) *PhysicalChannel {
 	return &PhysicalChannel{
 		name:    name,
 		nodeID:  -1,
 		leaseID: 0,
+		catalog: catalog,
 		status:  logpb.PChannelState_Waitting,
 	}
 }

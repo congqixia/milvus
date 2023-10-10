@@ -31,7 +31,7 @@ type Meta interface {
 	GetPChannel(channel string) *PhysicalChannel
 	GetPChannelNamesBy(filters ...PChannelFilter) []string
 
-	UpdateLeaseID(ctx context.Context, channel string)
+	UpdateLeaseID(ctx context.Context, channel string) error
 	AssignPChannel(ctx context.Context, channel string, nodeID int64) error
 	UnassignPChannel(ctx context.Context, channel string) error
 
@@ -59,11 +59,11 @@ func (l *PChannelList) GetNames() []string {
 	return lo.Keys(*l)
 }
 
-func NewPChannelList(channels []string, infos map[string]*logpb.PChannelInfo, leaseIDs map[string]uint64) PChannelList {
+func NewPChannelList(channels []string, catalog metastore.DataCoordCatalog, infos map[string]*logpb.PChannelInfo, leaseIDs map[string]uint64) PChannelList {
 	list := make(map[string]*PhysicalChannel)
 
 	for _, channel := range channels {
-		pChannel := NewPhysicalChannel(channel)
+		pChannel := NewPhysicalChannel(channel, catalog)
 		info, ok := infos[channel]
 		if ok {
 			pChannel.nodeID = info.GetNodeID()
@@ -101,7 +101,7 @@ func (m *ChannelMeta) initPChannel(ctx context.Context, channels ...string) erro
 		return err
 	}
 
-	m.channelList = NewPChannelList(channels, infos, leaseIDs)
+	m.channelList = NewPChannelList(channels, m.catalog, infos, leaseIDs)
 	return nil
 }
 
@@ -127,7 +127,7 @@ func (m *ChannelMeta) AssignPChannel(ctx context.Context, channel string, nodeID
 	return m.GetPChannel(channel).Assign(ctx, nodeID)
 }
 
-func (m *ChannelMeta) UnassignPChannel(ctx context.Context, channel string, nodeID int64) error {
+func (m *ChannelMeta) UnassignPChannel(ctx context.Context, channel string) error {
 	return m.GetPChannel(channel).Unassign(ctx)
 }
 

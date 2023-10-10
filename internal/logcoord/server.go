@@ -46,14 +46,14 @@ func NewLogCoord(factory msgstream.Factory) *Server {
 func (m *Server) Init(etcdSession *sessionutil.Session, catalog metastore.DataCoordCatalog) error {
 	var err error
 	m.initOnce.Do(func() {
-		m.sessionManager = session.NewSessionManager(session.DefaultLogNodeConnector, etcdSession)
-
+		m.meta = meta.NewChannelMeta(catalog)
 		err = m.meta.Init(m.rootCoord)
 		if err != nil {
 			return
 		}
 
-		err = m.sessionManager.Init(m.meta)
+		m.sessionManager = session.NewSessionManager(session.DefaultLogNodeConnector, etcdSession, m.meta)
+		err = m.sessionManager.Init()
 		if err != nil {
 			return
 		}
