@@ -161,29 +161,6 @@ func Test_singleTypeChannelsMgr_getVChans(t *testing.T) {
 	})
 }
 
-func Test_singleTypeChannelsMgr_getChannels(t *testing.T) {
-	t.Run("normal case", func(t *testing.T) {
-		m := &singleTypeChannelsMgr{
-			infos: map[UniqueID]streamInfos{
-				100: {channelInfos: channelInfos{vchans: []string{"111", "222"}, pchans: []string{"111"}}},
-			},
-		}
-		got, err := m.getChannels(100)
-		assert.NoError(t, err)
-		assert.ElementsMatch(t, []string{"111"}, got)
-	})
-
-	t.Run("error case", func(t *testing.T) {
-		m := &singleTypeChannelsMgr{
-			getChannelsFunc: func(collectionID UniqueID) (channelInfos, error) {
-				return channelInfos{}, errors.New("mock")
-			},
-		}
-		_, err := m.getChannels(100)
-		assert.Error(t, err)
-	})
-}
-
 func Test_singleTypeChannelsMgr_getVChannels(t *testing.T) {
 	t.Run("normal case", func(t *testing.T) {
 		m := &singleTypeChannelsMgr{
