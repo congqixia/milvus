@@ -29,7 +29,7 @@ import (
 type PhysicalChannel struct {
 	catalog metastore.DataCoordCatalog
 	name    string
-	status  logpb.PChannelState
+	state   logpb.PChannelState
 
 	nodeID  int64
 	leaseID uint64
@@ -45,7 +45,7 @@ func NewPhysicalChannel(name string, catalog metastore.DataCoordCatalog) *Physic
 		nodeID:  -1,
 		leaseID: 0,
 		catalog: catalog,
-		status:  logpb.PChannelState_Waitting,
+		state:   logpb.PChannelState_Waitting,
 	}
 }
 
@@ -64,7 +64,7 @@ func (c *PhysicalChannel) Assign(ctx context.Context, nodeID int64) error {
 	}
 
 	c.nodeID = nodeID
-	c.status = logpb.PChannelState_Watching
+	c.state = logpb.PChannelState_Watching
 	return nil
 }
 
@@ -83,7 +83,7 @@ func (c *PhysicalChannel) Unassign(ctx context.Context) error {
 	}
 
 	c.nodeID = -1
-	c.status = logpb.PChannelState_Waitting
+	c.state = logpb.PChannelState_Waitting
 	return nil
 }
 
@@ -121,11 +121,22 @@ func (c *PhysicalChannel) GetRef() uint64 {
 	return c.refCnt
 }
 
+func (c *PhysicalChannel) GetInfo() *logpb.PChannelInfo {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	return &logpb.PChannelInfo{
+		Name:   c.name,
+		State:  c.state,
+		NodeID: c.nodeID,
+	}
+}
+
 func (c *PhysicalChannel) CheckState(state logpb.PChannelState) bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
-	return c.status == state
+	return c.state == state
 }
 
 func (c *PhysicalChannel) IncRef() {

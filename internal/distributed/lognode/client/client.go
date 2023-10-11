@@ -94,6 +94,12 @@ func (c *Client) WatchChannel(ctx context.Context, req *logpb.WatchChannelReques
 	})
 }
 
+func (c *Client) UnwatchChannel(ctx context.Context, req *logpb.UnwatchChannelRequest, options ...grpc.CallOption) (*commonpb.Status, error) {
+	return wrapGrpcCall(ctx, c, func(client logpb.LogNodeClient) (*commonpb.Status, error) {
+		return client.UnwatchChannel(ctx, req, options...)
+	})
+}
+
 func (c *Client) Insert(ctx context.Context, req *logpb.InsertRequest, options ...grpc.CallOption) (*commonpb.Status, error) {
 	return wrapGrpcCall(ctx, c, func(client logpb.LogNodeClient) (*commonpb.Status, error) {
 		return client.Insert(ctx, req, options...)

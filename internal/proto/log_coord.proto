@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-package milvus.proto.index;
+package milvus.proto.log;
 
 option go_package = "github.com/milvus-io/milvus/internal/proto/logpb";
 
@@ -11,6 +11,7 @@ import "msg.proto";
 service LogNode {
     rpc GetComponentStates(milvus.GetComponentStatesRequest) returns (milvus.ComponentStates) {}
     rpc WatchChannel(WatchChannelRequest)returns (common.Status){};
+    rpc UnwatchChannel(UnwatchChannelRequest)returns (common.Status){};
     rpc Insert(InsertRequest)returns (common.Status){};
 }
 
@@ -27,6 +28,11 @@ message PChannelInfo {
 }
 
 message WatchChannelRequest{
+    common.MsgBase base = 1;
+    string pChannel = 2;
+}
+
+message UnwatchChannelRequest{
     common.MsgBase base = 1;
     string pChannel = 2;
 }

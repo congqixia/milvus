@@ -10,6 +10,7 @@ import "milvus.proto";
 import "schema.proto";
 import "msg.proto";
 import "index_coord.proto";
+import "log_coord.proto";
 
 // TODO: import google/protobuf/empty.proto
 message Empty {}
@@ -59,9 +60,7 @@ service DataCoord {
   rpc GetCompactionState(milvus.GetCompactionStateRequest) returns (milvus.GetCompactionStateResponse) {}
   rpc GetCompactionStateWithPlans(milvus.GetCompactionPlansRequest) returns (milvus.GetCompactionPlansResponse) {}
 
-  rpc WatchChannels(WatchChannelsRequest) returns (WatchChannelsResponse) {}
   rpc GetFlushState(GetFlushStateRequest) returns (milvus.GetFlushStateResponse) {}
-  rpc DropVirtualChannel(DropVirtualChannelRequest) returns (DropVirtualChannelResponse) {}
 
   rpc SetSegmentState(SetSegmentStateRequest) returns (SetSegmentStateResponse) {}
   // https://wiki.lfaidata.foundation/display/MIL/MEP+24+--+Support+bulk+load
@@ -91,8 +90,14 @@ service DataCoord {
   rpc GcConfirm(GcConfirmRequest) returns (GcConfirmResponse) {}
 
   rpc ReportDataNodeTtMsgs(ReportDataNodeTtMsgsRequest) returns (common.Status) {}
-}
 
+  rpc WatchChannels(WatchChannelsRequest) returns (WatchChannelsResponse) {}
+
+  rpc DropVirtualChannel(DropVirtualChannelRequest) returns (DropVirtualChannelResponse) {}
+  
+  rpc GetChannelDistribution(GetChannelDistributionRequest) returns (GetChannelDistributionResponse) {}
+}
+             
 service DataNode {
   rpc GetComponentStates(milvus.GetComponentStatesRequest) returns (milvus.ComponentStates) {}
   rpc GetStatisticsChannel(internal.GetStatisticsChannelRequest) returns (milvus.StringResponse) {}
@@ -533,6 +538,24 @@ message WatchChannelsRequest {
 
 message WatchChannelsResponse {
   common.Status status = 1;
+}
+
+message DropChannelsRequest {
+  int64 collectionID = 1;
+  repeated string channelNames = 2;
+}
+
+message DropChannelsResponse {
+  common.Status status = 1;
+}
+
+message GetChannelDistributionRequest{
+  common.MsgBase base = 1;
+}
+
+message GetChannelDistributionResponse{
+  common.Status status = 1;
+  repeated log.PChannelInfo infos = 2;
 }
 
 message SetSegmentStateRequest {

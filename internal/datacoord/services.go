@@ -1594,6 +1594,18 @@ func (s *Server) BroadcastAlteredCollection(ctx context.Context, req *datapb.Alt
 	return merr.Status(nil), nil
 }
 
+func (s *Server) GetChannelDistribution(ctx context.Context, req *datapb.GetChannelDistributionRequest) (*datapb.GetChannelDistributionResponse, error) {
+	if err := merr.CheckHealthy(s.GetStateCode()); err != nil {
+		return &datapb.GetChannelDistributionResponse{Status: merr.Status(err)}, nil
+	}
+	infos := s.logCoord.GetPChannelInfos()
+
+	return &datapb.GetChannelDistributionResponse{
+		Status: merr.Status(nil),
+		Infos:  infos,
+	}, nil
+}
+
 func (s *Server) CheckHealth(ctx context.Context, req *milvuspb.CheckHealthRequest) (*milvuspb.CheckHealthResponse, error) {
 	if err := merr.CheckHealthy(s.GetStateCode()); err != nil {
 		return &milvuspb.CheckHealthResponse{

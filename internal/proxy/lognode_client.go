@@ -22,6 +22,7 @@ import (
 	"sync"
 
 	"github.com/cockroachdb/errors"
+	"github.com/milvus-io/milvus/internal/proto/datapb"
 	"github.com/milvus-io/milvus/internal/types"
 	"github.com/milvus-io/milvus/pkg/util/merr"
 )
@@ -57,7 +58,7 @@ type lognodeManagerImpl struct {
 
 	// pchannel -> nodeClient
 	channelDistribution map[string]*nodeClient
-	rc                  types.RootCoordClient
+	dc                  types.DataCoordClient
 
 	mu sync.RWMutex
 }
@@ -90,5 +91,18 @@ func (m *lognodeManagerImpl) GetChannelClient(channel string) (types.LogNodeClie
 }
 
 func (m *lognodeManagerImpl) UpdateDistribution(ctx context.Context) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	resp, err := m.dc.GetChannelDistribution(ctx, &datapb.GetChannelDistributionRequest{})
+	if err != nil {
+		return err
+	}
+
+	err = merr.Error(resp.GetStatus())
+	if err != nil {
+		return err
+	}
+
 	return nil
 }

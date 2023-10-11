@@ -280,6 +280,9 @@ func (s *Server) GetComponentStates(ctx context.Context, req *milvuspb.GetCompon
 func (s *Server) WatchChannel(ctx context.Context, req *logpb.WatchChannelRequest) (*commonpb.Status, error) {
 	return s.lognode.WatchChannel(ctx, req)
 }
+func (s *Server) UnwatchChannel(ctx context.Context, req *logpb.UnwatchChannelRequest) (*commonpb.Status, error) {
+	return s.lognode.UnwatchChannel(ctx, req)
+}
 
 func (s *Server) Insert(ctx context.Context, req *logpb.InsertRequest) (*commonpb.Status, error) {
 	return s.lognode.Insert(ctx, req)

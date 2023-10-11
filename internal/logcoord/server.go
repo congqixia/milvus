@@ -22,6 +22,7 @@ import (
 	"github.com/milvus-io/milvus/internal/logcoord/meta"
 	"github.com/milvus-io/milvus/internal/logcoord/session"
 	"github.com/milvus-io/milvus/internal/metastore"
+	"github.com/milvus-io/milvus/internal/proto/logpb"
 	"github.com/milvus-io/milvus/internal/types"
 	"github.com/milvus-io/milvus/internal/util/sessionutil"
 	"github.com/milvus-io/milvus/pkg/log"
@@ -46,7 +47,7 @@ func NewLogCoord(factory msgstream.Factory) *Server {
 func (m *Server) Init(etcdSession *sessionutil.Session, catalog metastore.DataCoordCatalog) error {
 	var err error
 	m.initOnce.Do(func() {
-		m.meta = meta.NewChannelMeta(catalog)
+		m.meta = meta.NewMetaImpl(catalog)
 		err = m.meta.Init(m.rootCoord)
 		if err != nil {
 			return
@@ -74,7 +75,7 @@ func (m *Server) Stop() {
 	})
 }
 
-func (m *Server) WatchVChannel(channels ...string) error {
+func (m *Server) WatchVChannels(channels ...string) error {
 	err := m.meta.AddVChannel(channels...)
 	if err != nil {
 		return err
@@ -82,10 +83,14 @@ func (m *Server) WatchVChannel(channels ...string) error {
 	return nil
 }
 
-func (m *Server) UnwatchVChannel(channels ...string) error {
+func (m *Server) DropVChannels(channels ...string) error {
 	err := m.meta.RemoveVChannel(channels...)
 	if err != nil {
 		return err
 	}
 	return nil
+}
+
+func (m *Server) GetPChannelInfos() []*logpb.PChannelInfo {
+	return m.meta.GetPChannelInfos()
 }

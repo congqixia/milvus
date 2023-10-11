@@ -56,6 +56,31 @@ func (node *LogNode) WatchChannel(ctx context.Context, req *logpb.WatchChannelRe
 	return merr.Status(err), nil
 }
 
+func (node *LogNode) UnwatchChannel(ctx context.Context, req *logpb.UnwatchChannelRequest) (*commonpb.Status, error) {
+	log.Debug("received UnwatchChannel Request",
+		zap.Int64("msgID", req.GetBase().GetMsgID()),
+		zap.String("pChannel", req.GetPChannel()))
+
+	if !node.lifetime.Add(commonpbutil.IsHealthy) {
+		msg := fmt.Sprintf("log node %d is not ready", paramtable.GetNodeID())
+		err := merr.WrapErrServiceNotReady(msg)
+		return merr.Status(err), nil
+	}
+	defer node.lifetime.Done()
+
+	err := merr.CheckTargetID(req.GetBase())
+	if err != nil {
+		log.Warn("target ID not match",
+			zap.Int64("targetID", req.GetBase().GetTargetID()),
+			zap.Int64("nodeID", paramtable.GetNodeID()),
+		)
+		return merr.Status(err), nil
+	}
+
+	node.loggerManager.RemoveLogger(req.GetPChannel())
+	return merr.Status(nil), nil
+}
+
 func (node *LogNode) Insert(ctx context.Context, req *logpb.InsertRequest) (*commonpb.Status, error) {
 	log.Debug("received WatchChannel Request",
 		zap.Int64("msgID", req.GetBase().GetMsgID()),

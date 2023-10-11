@@ -67,11 +67,11 @@ ${protoc_opt} --go_out=plugins=grpc,paths=source_relative:./rootcoordpb root_coo
 ${protoc_opt} --go_out=plugins=grpc,paths=source_relative:./internalpb internal.proto || { echo 'generate internal.proto failed'; exit 1; }
 ${protoc_opt} --go_out=plugins=grpc,paths=source_relative:./proxypb proxy.proto|| { echo 'generate proxy.proto failed'; exit 1; }
 ${protoc_opt} --go_out=plugins=grpc,paths=source_relative:./indexpb index_coord.proto|| { echo 'generate index_coord.proto failed'; exit 1; }
+${protoc_opt} --go_out=plugins=grpc,paths=source_relative:./logpb log_coord.proto|| { echo 'generate log_coord.proto failed'; exit 1; }
 ${protoc_opt} --go_out=plugins=grpc,paths=source_relative:./datapb data_coord.proto|| { echo 'generate data_coord.proto failed'; exit 1; }
 ${protoc_opt} --go_out=plugins=grpc,paths=source_relative:./querypb query_coord.proto|| { echo 'generate query_coord.proto failed'; exit 1; }
 ${protoc_opt} --go_out=plugins=grpc,paths=source_relative:./planpb plan.proto|| { echo 'generate plan.proto failed'; exit 1; }
 ${protoc_opt} --go_out=plugins=grpc,paths=source_relative:./segcorepb segcore.proto|| { echo 'generate segcore.proto failed'; exit 1; }
-${protoc_opt} --go_out=plugins=grpc,paths=source_relative:./logpb log_coord.proto|| { echo 'generate log_coord.proto failed'; exit 1; }
 
 ${protoc_opt} --proto_path=$ROOT_DIR/cmd/tools/migration/legacy/ \
   --go_out=plugins=grpc,paths=source_relative:../../cmd/tools/migration/legacy/legacypb legacy.proto || { echo 'generate legacy.proto failed'; exit 1; }

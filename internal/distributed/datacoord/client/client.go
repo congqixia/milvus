@@ -616,3 +616,9 @@ func (c *Client) ReportDataNodeTtMsgs(ctx context.Context, req *datapb.ReportDat
 		return client.ReportDataNodeTtMsgs(ctx, req)
 	})
 }
+
+func (c *Client) GetChannelDistribution(ctx context.Context, req *datapb.GetChannelDistributionRequest, opts ...grpc.CallOption) (*datapb.GetChannelDistributionResponse, error) {
+	return wrapGrpcCall(ctx, c, func(client datapb.DataCoordClient) (*datapb.GetChannelDistributionResponse, error) {
+		return client.GetChannelDistribution(ctx, req)
+	})
+}

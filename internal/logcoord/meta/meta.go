@@ -29,6 +29,7 @@ type Meta interface {
 	Init(types.RootCoordClient) error
 	// physical Channel
 	GetPChannel(channel string) *PhysicalChannel
+	GetPChannelInfos() []*logpb.PChannelInfo
 	GetPChannelNamesBy(filters ...PChannelFilter) []string
 
 	UpdateLeaseID(ctx context.Context, channel string) error
@@ -38,7 +39,6 @@ type Meta interface {
 	// virtual vhannel
 	AddVChannel(channels ...string) error
 	RemoveVChannel(channels ...string) error
-	// ListVChannelName() []string
 }
 
 type PChannelFilter func(*PhysicalChannel) bool
@@ -57,6 +57,12 @@ func (l *PChannelList) Get(channel string) *PhysicalChannel {
 
 func (l *PChannelList) GetNames() []string {
 	return lo.Keys(*l)
+}
+
+func (l *PChannelList) GetInfos() []*logpb.PChannelInfo {
+	return lo.Map(lo.Values(*l), func(channel *PhysicalChannel, _ int) *logpb.PChannelInfo {
+		return channel.GetInfo()
+	})
 }
 
 func NewPChannelList(channels []string, catalog metastore.DataCoordCatalog, infos map[string]*logpb.PChannelInfo, leaseIDs map[string]uint64) PChannelList {
@@ -79,18 +85,18 @@ func NewPChannelList(channels []string, catalog metastore.DataCoordCatalog, info
 	return list
 }
 
-type ChannelMeta struct {
+type MetaImpl struct {
 	catalog     metastore.DataCoordCatalog
 	channelList PChannelList
 }
 
-func NewChannelMeta(catalog metastore.DataCoordCatalog) *ChannelMeta {
-	return &ChannelMeta{
+func NewMetaImpl(catalog metastore.DataCoordCatalog) *MetaImpl {
+	return &MetaImpl{
 		catalog: catalog,
 	}
 }
 
-func (m *ChannelMeta) initPChannel(ctx context.Context, channels ...string) error {
+func (m *MetaImpl) initPChannel(ctx context.Context, channels ...string) error {
 	infos, err := m.catalog.ListPChannelInfo(ctx)
 	if err != nil {
 		return err
@@ -105,7 +111,7 @@ func (m *ChannelMeta) initPChannel(ctx context.Context, channels ...string) erro
 	return nil
 }
 
-func (m *ChannelMeta) Init(rc types.RootCoordClient) error {
+func (m *MetaImpl) Init(rc types.RootCoordClient) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -119,23 +125,27 @@ func (m *ChannelMeta) Init(rc types.RootCoordClient) error {
 	return nil
 }
 
-func (m *ChannelMeta) UpdateLeaseID(ctx context.Context, channel string) error {
+func (m *MetaImpl) UpdateLeaseID(ctx context.Context, channel string) error {
 	return m.GetPChannel(channel).UpdateLeaseID(ctx)
 }
 
-func (m *ChannelMeta) AssignPChannel(ctx context.Context, channel string, nodeID int64) error {
+func (m *MetaImpl) AssignPChannel(ctx context.Context, channel string, nodeID int64) error {
 	return m.GetPChannel(channel).Assign(ctx, nodeID)
 }
 
-func (m *ChannelMeta) UnassignPChannel(ctx context.Context, channel string) error {
+func (m *MetaImpl) UnassignPChannel(ctx context.Context, channel string) error {
 	return m.GetPChannel(channel).Unassign(ctx)
 }
 
-func (m *ChannelMeta) GetPChannel(channel string) *PhysicalChannel {
+func (m *MetaImpl) GetPChannel(channel string) *PhysicalChannel {
 	return m.channelList.Get(channel)
 }
 
-func (m *ChannelMeta) GetPChannelNamesBy(filters ...PChannelFilter) []string {
+func (m *MetaImpl) GetPChannelInfos() []*logpb.PChannelInfo {
+	return m.channelList.GetInfos()
+}
+
+func (m *MetaImpl) GetPChannelNamesBy(filters ...PChannelFilter) []string {
 	channels := []string{}
 	filter := func(channel *PhysicalChannel) bool {
 		for _, filter := range filters {
@@ -154,7 +164,7 @@ func (m *ChannelMeta) GetPChannelNamesBy(filters ...PChannelFilter) []string {
 	return channels
 }
 
-func (m *ChannelMeta) AddVChannel(channels ...string) error {
+func (m *MetaImpl) AddVChannel(channels ...string) error {
 	for _, channel := range channels {
 		pchannel := getPChannelName(channel)
 		m.channelList.Get(pchannel).IncRef()
@@ -162,7 +172,7 @@ func (m *ChannelMeta) AddVChannel(channels ...string) error {
 	return nil
 }
 
-func (m *ChannelMeta) RemoveVChannel(channels ...string) error {
+func (m *MetaImpl) RemoveVChannel(channels ...string) error {
 	for _, channel := range channels {
 		pchannel := getPChannelName(channel)
 		m.channelList.Get(pchannel).DecRef()
