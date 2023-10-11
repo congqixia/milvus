@@ -27,6 +27,11 @@ message PChannelInfo {
     int64 nodeID = 3;
 }
 
+message LogNodeInfo{
+    int64 nodeID = 1;
+    string address = 2;
+}
+
 message WatchChannelRequest{
     common.MsgBase base = 1;
     string pChannel = 2;

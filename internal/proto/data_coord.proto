@@ -555,7 +555,8 @@ message GetChannelDistributionRequest{
 
 message GetChannelDistributionResponse{
   common.Status status = 1;
-  repeated log.PChannelInfo infos = 2;
+  repeated log.PChannelInfo channelInfos = 2;
+  repeated log.LogNodeInfo  nodeInfos = 3;
 }
 
 message SetSegmentStateRequest {

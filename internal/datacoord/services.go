@@ -1598,11 +1598,13 @@ func (s *Server) GetChannelDistribution(ctx context.Context, req *datapb.GetChan
 	if err := merr.CheckHealthy(s.GetStateCode()); err != nil {
 		return &datapb.GetChannelDistributionResponse{Status: merr.Status(err)}, nil
 	}
-	infos := s.logCoord.GetPChannelInfos()
+	channelInfos := s.logCoord.GetPChannelInfos()
+	nodeInfos := s.logCoord.GetNodeInfos()
 
 	return &datapb.GetChannelDistributionResponse{
-		Status: merr.Status(nil),
-		Infos:  infos,
+		Status:       merr.Status(nil),
+		ChannelInfos: channelInfos,
+		NodeInfos:    nodeInfos,
 	}, nil
 }
 

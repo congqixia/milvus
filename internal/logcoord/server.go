@@ -94,3 +94,7 @@ func (m *Server) DropVChannels(channels ...string) error {
 func (m *Server) GetPChannelInfos() []*logpb.PChannelInfo {
 	return m.meta.GetPChannelInfos()
 }
+
+func (m *Server) GetNodeInfos() []*logpb.LogNodeInfo {
+	return m.sessionManager.ListNodeInfos()
+}

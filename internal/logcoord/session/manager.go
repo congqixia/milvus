@@ -30,6 +30,7 @@ import (
 	"github.com/milvus-io/milvus/pkg/util/merr"
 	"github.com/milvus-io/milvus/pkg/util/paramtable"
 	"github.com/milvus-io/milvus/pkg/util/retry"
+	"github.com/samber/lo"
 	"go.uber.org/zap"
 )
 
@@ -47,29 +48,24 @@ type Manager interface {
 // SessionManager manage lognode sessions
 // And trigger balance when log node changes
 type SessionManager struct {
-	sessions struct {
-		sync.RWMutex
-		data map[int64]*Session
-	}
-
 	meta      meta.Meta
+	sessions  map[int64]*Session
 	connector SessionConnector
 	balancer  *SessionBalancer
 	observer  *SessionObserver
+
+	mu sync.RWMutex
 }
 
 func NewSessionManager(connector SessionConnector, etcdSession *sessionutil.Session, meta meta.Meta) *SessionManager {
 	manager := &SessionManager{
-		sessions: struct {
-			sync.RWMutex
-			data map[int64]*Session
-		}{data: make(map[int64]*Session)},
-		connector: connector,
+		sessions:  make(map[int64]*Session),
 		meta:      meta,
+		connector: connector,
 	}
+
 	manager.observer = NewSessionObserver(manager, etcdSession)
 	manager.balancer = NewSessionBalancer(manager, meta)
-
 	return manager
 }
 
@@ -116,33 +112,42 @@ func (s *SessionManager) Stop() {
 }
 
 func (m *SessionManager) AddSession(nodeID int64, address string) {
-	m.sessions.Lock()
-	defer m.sessions.Unlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
 	session := NewSession(nodeID, address, m.connector)
-	m.sessions.data[nodeID] = session
+	m.sessions[nodeID] = session
 	m.balancer.AddNode(session.nodeID)
 	log.Info("add log node session", zap.Int64("nodeID", nodeID), zap.String("address", address))
 }
 
 func (m *SessionManager) RemoveSession(nodeID int64) {
-	m.sessions.Lock()
-	defer m.sessions.Unlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 
-	delete(m.sessions.data, nodeID)
+	delete(m.sessions, nodeID)
 	m.balancer.RemoveNode(nodeID)
 	log.Info("remove log node session", zap.Int64("nodeID", nodeID))
 }
 
 func (m *SessionManager) GetSessions(nodeID int64) *Session {
-	m.sessions.RLock()
-	defer m.sessions.RUnlock()
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 
-	session, ok := m.sessions.data[nodeID]
+	session, ok := m.sessions[nodeID]
 	if !ok {
 		return nil
 	}
 	return session
+}
+
+func (m *SessionManager) ListNodeInfos() []*logpb.LogNodeInfo {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	return lo.Map(lo.Values(m.sessions), func(session *Session, _ int) *logpb.LogNodeInfo {
+		return session.GetInfo()
+	})
 }
 
 func (m *SessionManager) watchPChannel(ctx context.Context, channel string, nodeID int64) error {

@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	grpclognodeclient "github.com/milvus-io/milvus/internal/distributed/lognode/client"
+	"github.com/milvus-io/milvus/internal/proto/logpb"
 	"github.com/milvus-io/milvus/internal/types"
 	"github.com/milvus-io/milvus/pkg/log"
 	"go.uber.org/zap"
@@ -46,6 +47,13 @@ func (s *Session) connect(ctx context.Context) error {
 	}
 	s.client = client
 	return nil
+}
+
+func (s *Session) GetInfo() *logpb.LogNodeInfo {
+	return &logpb.LogNodeInfo{
+		NodeID:  s.nodeID,
+		Address: s.address,
+	}
 }
 
 func (s *Session) GetClient(ctx context.Context) types.LogNodeClient {
