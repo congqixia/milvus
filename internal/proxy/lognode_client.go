@@ -23,13 +23,16 @@ import (
 
 	"github.com/cockroachdb/errors"
 	"github.com/milvus-io/milvus/internal/proto/datapb"
+	"github.com/milvus-io/milvus/internal/proto/logpb"
 	"github.com/milvus-io/milvus/internal/types"
+	"github.com/milvus-io/milvus/pkg/log"
 	"github.com/milvus-io/milvus/pkg/util/merr"
+	"go.uber.org/zap"
 )
 
-type logNodeCreatorFunc func(ctx context.Context, addr string, nodeID int64) (types.LogNodeClient, error)
+type LogNodeCreatorFunc func(ctx context.Context, addr string, nodeID int64) (types.LogNodeClient, error)
 
-type lognodeManager interface {
+type LognodeManager interface {
 	// get log node client by channel name
 	GetChannelClient(channel string) (types.LogNodeClient, error)
 	GetNodeClient(nodeID int64) (types.LogNodeClient, error)
@@ -44,6 +47,17 @@ type nodeClient struct {
 	client   types.LogNodeClient
 }
 
+func (c *nodeClient) close() error {
+	if !c.isClosed {
+		err := c.client.Close()
+		if err != nil {
+			return err
+		}
+		c.isClosed = true
+	}
+	return nil
+}
+
 func (c *nodeClient) getClient() (types.LogNodeClient, error) {
 	if c.isClosed {
 		return nil, errors.New("client is closed")
@@ -51,19 +65,19 @@ func (c *nodeClient) getClient() (types.LogNodeClient, error) {
 	return c.client, nil
 }
 
-type lognodeManagerImpl struct {
-	// nodeID -> nodeClient
+type LognodeManagerImpl struct {
+	// nodeID -> NodeClient
 	clients       map[UniqueID]*nodeClient
-	clientCreator logNodeCreatorFunc
+	clientCreator LogNodeCreatorFunc
 
-	// pchannel -> nodeClient
+	// pchannel -> NodeClient
 	channelDistribution map[string]*nodeClient
 	dc                  types.DataCoordClient
 
 	mu sync.RWMutex
 }
 
-func (m *lognodeManagerImpl) getNodeClient(nodeID int64) (types.LogNodeClient, error) {
+func (m *LognodeManagerImpl) getNodeClient(nodeID int64) (types.LogNodeClient, error) {
 	client, ok := m.clients[nodeID]
 	if !ok {
 		return nil, fmt.Errorf("can not find client of node %d", nodeID)
@@ -71,14 +85,14 @@ func (m *lognodeManagerImpl) getNodeClient(nodeID int64) (types.LogNodeClient, e
 	return client.getClient()
 }
 
-func (m *lognodeManagerImpl) GetNodeClient(nodeID int64) (types.LogNodeClient, error) {
+func (m *LognodeManagerImpl) GetNodeClient(nodeID int64) (types.LogNodeClient, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
 	return m.getNodeClient(nodeID)
 }
 
-func (m *lognodeManagerImpl) GetChannelClient(channel string) (types.LogNodeClient, error) {
+func (m *LognodeManagerImpl) GetChannelClient(channel string) (types.LogNodeClient, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -90,7 +104,39 @@ func (m *lognodeManagerImpl) GetChannelClient(channel string) (types.LogNodeClie
 	return client.getClient()
 }
 
-func (m *lognodeManagerImpl) UpdateDistribution(ctx context.Context) error {
+func (m *LognodeManagerImpl) updateClients(ctx context.Context, nodes []*logpb.LogNodeInfo) error {
+	newClients := make(map[UniqueID]*nodeClient)
+	for _, node := range nodes {
+		if client, ok := m.clients[node.NodeID]; ok {
+			newClients[node.GetNodeID()] = client
+		} else {
+			// TODO RETRY?
+			client, err := m.clientCreator(ctx, node.GetAddress(), node.GetNodeID())
+			if err != nil {
+				log.Warn("connect new log node failed", zap.Int64("nodeID", node.GetNodeID()), zap.Error(err))
+				return err
+			}
+			newClients[node.GetNodeID()] = &nodeClient{
+				nodeID:  node.GetNodeID(),
+				address: node.GetAddress(),
+				client:  client,
+			}
+		}
+	}
+
+	for _, client := range m.clients {
+		if client, ok := newClients[client.nodeID]; !ok {
+			if err := client.close(); err != nil {
+				log.Warn("close invalid log node client failed", zap.Int64("nodeID", client.nodeID), zap.Error(err))
+				return err
+			}
+		}
+	}
+	m.clients = newClients
+	return nil
+}
+
+func (m *LognodeManagerImpl) UpdateDistribution(ctx context.Context) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -102,6 +148,22 @@ func (m *lognodeManagerImpl) UpdateDistribution(ctx context.Context) error {
 	err = merr.Error(resp.GetStatus())
 	if err != nil {
 		return err
+	}
+
+	err = m.updateClients(ctx, resp.NodeInfos)
+	if err != nil {
+		return err
+	}
+
+	m.channelDistribution = make(map[string]*nodeClient)
+	for _, channel := range resp.ChannelInfos {
+		if client, ok := m.clients[channel.GetNodeID()]; ok {
+			m.channelDistribution[channel.GetName()] = client
+		} else {
+			log.Warn("channel waitting assign or assign to unknown node",
+				zap.String("channel", channel.GetName()),
+				zap.Int64("nodeID", channel.GetNodeID()))
+		}
 	}
 
 	return nil
