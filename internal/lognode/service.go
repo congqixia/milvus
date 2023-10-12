@@ -22,6 +22,7 @@ import (
 
 	"github.com/milvus-io/milvus-proto/go-api/v2/commonpb"
 	"github.com/milvus-io/milvus/internal/proto/logpb"
+	"github.com/samber/lo"
 
 	"github.com/milvus-io/milvus/pkg/log"
 	"github.com/milvus-io/milvus/pkg/mq/msgstream"
@@ -78,13 +79,13 @@ func (node *LogNode) UnwatchChannel(ctx context.Context, req *logpb.UnwatchChann
 	}
 
 	node.loggerManager.RemoveLogger(req.GetPChannel())
-	return merr.Status(nil), nil
+	return merr.Status(err), nil
 }
 
 func (node *LogNode) Insert(ctx context.Context, req *logpb.InsertRequest) (*commonpb.Status, error) {
-	log.Debug("received WatchChannel Request",
+	log.Debug("received Insert Request",
 		zap.Int64("msgID", req.GetBase().GetMsgID()),
-		zap.Strings("vChannels", req.GetVChannels()))
+		zap.Strings("channels", req.GetPChannels()))
 
 	if !node.lifetime.Add(commonpbutil.IsHealthy) {
 		msg := fmt.Sprintf("log node %d is not ready", paramtable.GetNodeID())
@@ -102,10 +103,12 @@ func (node *LogNode) Insert(ctx context.Context, req *logpb.InsertRequest) (*com
 		return merr.Status(err), nil
 	}
 
-	msg := &msgstream.InsertMsg{
-		BaseMsg:       msgstream.BaseMsg{},
-		InsertRequest: *req.Msg,
-	}
-	err = node.loggerManager.Produce(ctx, req.VChannels[0], msg)
+	msgs := lo.RepeatBy(len(req.Msgs),
+		func(i int) msgstream.TsMsg {
+			return &msgstream.InsertMsg{
+				InsertRequest: *req.Msgs[i],
+			}
+		})
+	err = node.loggerManager.Produce(ctx, req.PChannels[0], msgs)
 	return merr.Status(err), nil
 }

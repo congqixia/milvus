@@ -25,7 +25,6 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/milvus-io/milvus-proto/go-api/v2/commonpb"
-	"github.com/milvus-io/milvus-proto/go-api/v2/milvuspb"
 	"github.com/milvus-io/milvus-proto/go-api/v2/msgpb"
 	"github.com/milvus-io/milvus-proto/go-api/v2/schemapb"
 	"github.com/milvus-io/milvus/internal/allocator"
@@ -38,19 +37,19 @@ import (
 	"github.com/milvus-io/milvus/pkg/util/typeutil"
 )
 
-func genInsertMsgsByPartition(ctx context.Context,
+func genInsertMsgsByPartition(
 	segmentID UniqueID,
 	partitionID UniqueID,
 	partitionName string,
 	rowOffsets []int,
 	channelName string,
 	insertMsg *msgstream.InsertMsg,
-) ([]msgstream.TsMsg, error) {
+) ([]*msgpb.InsertRequest, error) {
 	threshold := Params.PulsarCfg.MaxMessageSize.GetAsInt()
 
 	// create empty insert message
-	createInsertMsg := func(segmentID UniqueID, channelName string) *msgstream.InsertMsg {
-		insertReq := msgpb.InsertRequest{
+	createInsertRequest := func(segmentID UniqueID, channelName string) *msgpb.InsertRequest {
+		insertReq := &msgpb.InsertRequest{
 			Base: commonpbutil.NewMsgBase(
 				commonpbutil.WithMsgType(commonpb.MsgType_Insert),
 				commonpbutil.WithTimeStamp(insertMsg.BeginTimestamp), // entity's timestamp was set to equal it.BeginTimestamp in preExecute()
@@ -65,20 +64,12 @@ func genInsertMsgsByPartition(ctx context.Context,
 			Version:        msgpb.InsertDataVersion_ColumnBased,
 		}
 		insertReq.FieldsData = make([]*schemapb.FieldData, len(insertMsg.GetFieldsData()))
-
-		msg := &msgstream.InsertMsg{
-			BaseMsg: msgstream.BaseMsg{
-				Ctx: ctx,
-			},
-			InsertRequest: insertReq,
-		}
-
-		return msg
+		return insertReq
 	}
 
-	repackedMsgs := make([]msgstream.TsMsg, 0)
+	repackedMsgs := make([]*msgpb.InsertRequest, 0)
 	requestSize := 0
-	msg := createInsertMsg(segmentID, channelName)
+	msg := createInsertRequest(segmentID, channelName)
 	for _, offset := range rowOffsets {
 		curRowMessageSize, err := typeutil.EstimateEntitySize(insertMsg.GetFieldsData(), offset)
 		if err != nil {
@@ -88,13 +79,11 @@ func genInsertMsgsByPartition(ctx context.Context,
 		// if insertMsg's size is greater than the threshold, split into multiple insertMsgs
 		if requestSize+curRowMessageSize >= threshold {
 			repackedMsgs = append(repackedMsgs, msg)
-			msg = createInsertMsg(segmentID, channelName)
+			msg = createInsertRequest(segmentID, channelName)
 			requestSize = 0
 		}
 
 		typeutil.AppendFieldData(msg.FieldsData, insertMsg.GetFieldsData(), int64(offset))
-		msg.HashValues = append(msg.HashValues, insertMsg.HashValues[offset])
-		msg.Timestamps = append(msg.Timestamps, insertMsg.Timestamps[offset])
 		msg.RowIDs = append(msg.RowIDs, insertMsg.RowIDs[offset])
 		msg.NumRows++
 		requestSize += curRowMessageSize
@@ -110,8 +99,8 @@ func repackInsertDataByPartition(ctx context.Context,
 	channelName string,
 	insertMsg *msgstream.InsertMsg,
 	segIDAssigner *segIDAssigner,
-) ([]msgstream.TsMsg, error) {
-	res := make([]msgstream.TsMsg, 0)
+) ([]*msgpb.InsertRequest, error) {
+	res := make([]*msgpb.InsertRequest, 0)
 
 	maxTs := Timestamp(0)
 	for _, offset := range rowOffsets {
@@ -140,7 +129,7 @@ func repackInsertDataByPartition(ctx context.Context,
 	startPos := 0
 	for segmentID, count := range assignedSegmentInfos {
 		subRowOffsets := rowOffsets[startPos : startPos+int(count)]
-		msgs, err := genInsertMsgsByPartition(ctx, segmentID, partitionID, partitionName, subRowOffsets, channelName, insertMsg)
+		msgs, err := genInsertMsgsByPartition(segmentID, partitionID, partitionName, subRowOffsets, channelName, insertMsg)
 		if err != nil {
 			log.Warn("repack insert data to insert msgs failed",
 				zap.String("collectionName", insertMsg.CollectionName),
@@ -155,42 +144,16 @@ func repackInsertDataByPartition(ctx context.Context,
 	return res, nil
 }
 
-func setMsgID(ctx context.Context,
-	msgs []msgstream.TsMsg,
-	idAllocator *allocator.IDAllocator,
-) error {
-	var idBegin int64
-	var err error
-
-	err = retry.Do(ctx, func() error {
-		idBegin, _, err = idAllocator.Alloc(uint32(len(msgs)))
-		return err
-	})
-	if err != nil {
-		log.Error("failed to allocate msg id", zap.Error(err))
-		return err
-	}
-
-	for i, msg := range msgs {
-		msg.SetID(idBegin + UniqueID(i))
-	}
-
-	return nil
-}
-
 func repackInsertData(ctx context.Context,
 	channelNames []string,
 	insertMsg *msgstream.InsertMsg,
-	result *milvuspb.MutationResult,
+	pks *schemapb.IDs,
 	idAllocator *allocator.IDAllocator,
 	segIDAssigner *segIDAssigner,
-) (*msgstream.MsgPack, error) {
-	msgPack := &msgstream.MsgPack{
-		BeginTs: insertMsg.BeginTs(),
-		EndTs:   insertMsg.EndTs(),
-	}
-
-	channel2RowOffsets := assignChannelsByPK(result.IDs, channelNames, insertMsg)
+) (map[string][]*msgpb.InsertRequest, error) {
+	msgNum := 0
+	channelMsgs := make(map[string][]*msgpb.InsertRequest)
+	channel2RowOffsets := assignChannelsByPK(pks, channelNames, insertMsg)
 	for channel, rowOffsets := range channel2RowOffsets {
 		partitionName := insertMsg.PartitionName
 		msgs, err := repackInsertDataByPartition(ctx, partitionName, rowOffsets, channel, insertMsg, segIDAssigner)
@@ -201,36 +164,44 @@ func repackInsertData(ctx context.Context,
 				zap.Error(err))
 			return nil, err
 		}
-
-		msgPack.Msgs = append(msgPack.Msgs, msgs...)
+		channelMsgs[channel] = msgs
+		msgNum += len(msgs)
 	}
 
-	err := setMsgID(ctx, msgPack.Msgs, idAllocator)
+	var idIter int64
+	var err error
+
+	err = retry.Do(ctx, func() error {
+		idIter, _, err = idAllocator.Alloc(uint32(msgNum))
+		return err
+	})
+
 	if err != nil {
-		log.Error("failed to set msgID when repack insert data",
-			zap.String("collectionName", insertMsg.CollectionName),
-			zap.String("partition name", insertMsg.PartitionName),
-			zap.Error(err))
+		log.Error("failed to allocate msg id", zap.Error(err))
 		return nil, err
 	}
 
-	return msgPack, nil
+	for _, msgs := range channelMsgs {
+		for _, msg := range msgs {
+			msg.Base.MsgID = idIter
+			idIter += 1
+		}
+	}
+
+	return channelMsgs, nil
 }
 
 func repackInsertDataWithPartitionKey(ctx context.Context,
 	channelNames []string,
 	partitionKeys *schemapb.FieldData,
 	insertMsg *msgstream.InsertMsg,
-	result *milvuspb.MutationResult,
+	pks *schemapb.IDs,
 	idAllocator *allocator.IDAllocator,
 	segIDAssigner *segIDAssigner,
-) (*msgstream.MsgPack, error) {
-	msgPack := &msgstream.MsgPack{
-		BeginTs: insertMsg.BeginTs(),
-		EndTs:   insertMsg.EndTs(),
-	}
-
-	channel2RowOffsets := assignChannelsByPK(result.IDs, channelNames, insertMsg)
+) (map[string][]*msgpb.InsertRequest, error) {
+	msgNum := 0
+	channelMsgs := make(map[string][]*msgpb.InsertRequest)
+	channel2RowOffsets := assignChannelsByPK(pks, channelNames, insertMsg)
 	partitionNames, err := getDefaultPartitionNames(ctx, insertMsg.GetDbName(), insertMsg.CollectionName)
 	if err != nil {
 		log.Warn("get default partition names failed in partition key mode",
@@ -257,7 +228,7 @@ func repackInsertDataWithPartitionKey(ctx context.Context,
 		}
 
 		errGroup, _ := errgroup.WithContext(ctx)
-		partition2Msgs := typeutil.NewConcurrentMap[string, []msgstream.TsMsg]()
+		partition2Msgs := typeutil.NewConcurrentMap[string, []*msgpb.InsertRequest]()
 		for partitionName, offsets := range partition2RowOffsets {
 			partitionName := partitionName
 			offsets := offsets
@@ -281,19 +252,32 @@ func repackInsertDataWithPartitionKey(ctx context.Context,
 			return nil, err
 		}
 
-		partition2Msgs.Range(func(name string, msgs []msgstream.TsMsg) bool {
-			msgPack.Msgs = append(msgPack.Msgs, msgs...)
+		packMsgs := []*msgpb.InsertRequest{}
+		partition2Msgs.Range(func(name string, msgs []*msgpb.InsertRequest) bool {
+			packMsgs = append(packMsgs, msgs...)
 			return true
 		})
+		msgNum += len(packMsgs)
+		channelMsgs[channel] = packMsgs
 	}
 
-	err = setMsgID(ctx, msgPack.Msgs, idAllocator)
+	var idIter int64
+	err = retry.Do(ctx, func() error {
+		idIter, _, err = idAllocator.Alloc(uint32(msgNum))
+		return err
+	})
+
 	if err != nil {
-		log.Error("failed to set msgID when repack insert data",
-			zap.String("collectionName", insertMsg.CollectionName),
-			zap.Error(err))
+		log.Error("failed to allocate msg id", zap.Error(err))
 		return nil, err
 	}
 
-	return msgPack, nil
+	for _, msgs := range channelMsgs {
+		for _, msg := range msgs {
+			msg.Base.MsgID = idIter
+			idIter += 1
+		}
+	}
+
+	return channelMsgs, nil
 }

@@ -99,7 +99,7 @@ func (dt *deleteTask) setChannels() error {
 	if err != nil {
 		return err
 	}
-	channels, err := dt.chMgr.getChannels(collID)
+	channels, err := dt.chMgr.GetChannels(collID)
 	if err != nil {
 		return err
 	}
@@ -205,7 +205,7 @@ func (dt *deleteTask) PreExecute(ctx context.Context) error {
 	dt.schema = schema
 
 	// hash primary keys to channels
-	channelNames, err := dt.chMgr.getVChannels(dt.collectionID)
+	channelNames, err := dt.chMgr.GetVChannels(dt.collectionID)
 	if err != nil {
 		return ErrWithLog(log, "Failed to get primary keys from expr", err)
 	}
@@ -226,10 +226,7 @@ func (dt *deleteTask) Execute(ctx context.Context) (err error) {
 	}
 
 	dt.tr = timerecord.NewTimeRecorder(fmt.Sprintf("proxy execute delete %d", dt.ID()))
-	stream, err := dt.chMgr.getOrCreateDmlStream(dt.collectionID)
-	if err != nil {
-		return err
-	}
+	var stream msgstream.MsgStream = nil
 
 	plan, err := planparserv2.CreateRetrievePlan(dt.schema, dt.req.Expr)
 	if err != nil {

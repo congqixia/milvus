@@ -10,11 +10,11 @@ import (
 
 	"github.com/milvus-io/milvus-proto/go-api/v2/commonpb"
 	"github.com/milvus-io/milvus-proto/go-api/v2/milvuspb"
+	"github.com/milvus-io/milvus-proto/go-api/v2/msgpb"
 	"github.com/milvus-io/milvus-proto/go-api/v2/schemapb"
 	"github.com/milvus-io/milvus/internal/allocator"
 	"github.com/milvus-io/milvus/pkg/log"
 	"github.com/milvus-io/milvus/pkg/metrics"
-	"github.com/milvus-io/milvus/pkg/mq/msgstream"
 	"github.com/milvus-io/milvus/pkg/util/merr"
 	"github.com/milvus-io/milvus/pkg/util/paramtable"
 	"github.com/milvus-io/milvus/pkg/util/timerecord"
@@ -77,7 +77,7 @@ func (it *insertTask) setChannels() error {
 	if err != nil {
 		return err
 	}
-	channels, err := it.chMgr.getChannels(collID)
+	channels, err := it.chMgr.GetChannels(collID)
 	if err != nil {
 		return err
 	}
@@ -224,13 +224,7 @@ func (it *insertTask) Execute(ctx context.Context) error {
 	it.insertMsg.CollectionID = collID
 
 	getCacheDur := tr.RecordSpan()
-	stream, err := it.chMgr.getOrCreateDmlStream(collID)
-	if err != nil {
-		return err
-	}
-	getMsgStreamDur := tr.RecordSpan()
-
-	channelNames, err := it.chMgr.getVChannels(collID)
+	channelNames, err := it.chMgr.GetVChannels(collID)
 	if err != nil {
 		log.Warn("get vChannels failed", zap.Int64("collectionID", collID), zap.Error(err))
 		it.result.Status = merr.Status(err)
@@ -242,15 +236,14 @@ func (it *insertTask) Execute(ctx context.Context) error {
 		zap.Int64("collectionID", collID),
 		zap.Strings("virtual_channels", channelNames),
 		zap.Int64("task_id", it.ID()),
-		zap.Duration("get cache duration", getCacheDur),
-		zap.Duration("get msgStream duration", getMsgStreamDur))
+		zap.Duration("get cache duration", getCacheDur))
 
 	// assign segmentID for insert data and repack data by segmentID
-	var msgPack *msgstream.MsgPack
+	var channelMsgs map[string][]*msgpb.InsertRequest
 	if it.partitionKeys == nil {
-		msgPack, err = repackInsertData(it.TraceCtx(), channelNames, it.insertMsg, it.result, it.idAllocator, it.segIDAssigner)
+		channelMsgs, err = repackInsertData(it.TraceCtx(), channelNames, it.insertMsg, it.result.IDs, it.idAllocator, it.segIDAssigner)
 	} else {
-		msgPack, err = repackInsertDataWithPartitionKey(it.TraceCtx(), channelNames, it.partitionKeys, it.insertMsg, it.result, it.idAllocator, it.segIDAssigner)
+		channelMsgs, err = repackInsertDataWithPartitionKey(it.TraceCtx(), channelNames, it.partitionKeys, it.insertMsg, it.result.IDs, it.idAllocator, it.segIDAssigner)
 	}
 	if err != nil {
 		log.Warn("assign segmentID and repack insert data failed", zap.Error(err))
@@ -261,12 +254,14 @@ func (it *insertTask) Execute(ctx context.Context) error {
 
 	log.Debug("assign segmentID for insert data success",
 		zap.Duration("assign segmentID duration", assignSegmentIDDur))
-	err = stream.Produce(msgPack)
+
+	err = it.chMgr.Insert(it.ctx, channelMsgs)
 	if err != nil {
 		log.Warn("fail to produce insert msg", zap.Error(err))
 		it.result.Status = merr.Status(err)
 		return err
 	}
+
 	sendMsgDur := tr.RecordSpan()
 	metrics.ProxySendMutationReqLatency.WithLabelValues(strconv.FormatInt(paramtable.GetNodeID(), 10), metrics.InsertLabel).Observe(float64(sendMsgDur.Milliseconds()))
 	totalExecDur := tr.ElapseSpan()

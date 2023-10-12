@@ -60,15 +60,9 @@ func (logger *WriteAheadLogger) Init(ctx context.Context, factory msgstream.Fact
 	return nil
 }
 
-func (logger *WriteAheadLogger) Produce(ctx context.Context, msg msgstream.TsMsg) error {
+func (logger *WriteAheadLogger) Produce(ctx context.Context, pack *msgstream.MsgPack) error {
 	logger.mu.Lock()
 	defer logger.mu.Unlock()
-
-	pack := &msgstream.MsgPack{
-		BeginTs: msg.BeginTs(),
-		EndTs:   msg.EndTs(),
-		Msgs:    []msgstream.TsMsg{msg},
-	}
 
 	err := logger.stream.Produce(pack)
 	if err != nil {

@@ -44,6 +44,6 @@ message UnwatchChannelRequest{
 
 message InsertRequest{
     common.MsgBase base = 1;
-    msg.InsertRequest msg = 2;
-    repeated string vChannels = 3;
+    repeated msg.InsertRequest msgs = 2;
+    repeated string pChannels = 3;
 }

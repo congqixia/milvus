@@ -30,12 +30,6 @@ import (
 	"github.com/milvus-io/milvus/pkg/util/paramtable"
 )
 
-func Test_removeDuplicate(t *testing.T) {
-	s1 := []string{"11", "11"}
-	filtered1 := removeDuplicate(s1)
-	assert.ElementsMatch(t, filtered1, []string{"11"})
-}
-
 func Test_newChannels(t *testing.T) {
 	t.Run("length mismatch", func(t *testing.T) {
 		_, err := newChannels([]string{"111", "222"}, []string{"111"})

@@ -89,7 +89,7 @@ func (m *LoggerManager) RemoveLogger(channel string) {
 	}
 }
 
-func (m *LoggerManager) Produce(ctx context.Context, channel string, msg msgstream.TsMsg) error {
+func (m *LoggerManager) Produce(ctx context.Context, channel string, msgs []msgstream.TsMsg) error {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
@@ -102,9 +102,18 @@ func (m *LoggerManager) Produce(ctx context.Context, channel string, msg msgstre
 	if err != nil {
 		return err
 	}
-	msg.SetTs(ts)
 
-	return logger.Produce(ctx, msg)
+	for _, msg := range msgs {
+		msg.SetTs(ts)
+	}
+
+	pack := &msgstream.MsgPack{
+		BeginTs: ts,
+		EndTs:   ts,
+		Msgs:    msgs,
+	}
+
+	return logger.Produce(ctx, pack)
 }
 
 func (m *LoggerManager) Broadcast(ctx context.Context, msg msgstream.TsMsg, filters ...ChannelFilter) (uint64, error) {
@@ -116,6 +125,12 @@ func (m *LoggerManager) Broadcast(ctx context.Context, msg msgstream.TsMsg, filt
 		return 0, err
 	}
 	msg.SetTs(ts)
+
+	pack := &msgstream.MsgPack{
+		BeginTs: ts,
+		EndTs:   ts,
+		Msgs:    []msgstream.TsMsg{msg},
+	}
 
 	filterFunc := func(wal *WriteAheadLogger) bool {
 		for _, filter := range filters {
@@ -129,7 +144,7 @@ func (m *LoggerManager) Broadcast(ctx context.Context, msg msgstream.TsMsg, filt
 	errCombine := []error{}
 	for channel, logger := range m.loggers {
 		if !filterFunc(logger) {
-			err := logger.Produce(ctx, msg)
+			err := logger.Produce(ctx, pack)
 			if err != nil {
 				errCombine = append(errCombine, err)
 				log.Warn("some channel could not work when board cast", zap.String("channel", channel))

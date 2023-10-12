@@ -30,81 +30,85 @@ import (
 	"go.uber.org/zap"
 )
 
-type LogNodeCreatorFunc func(ctx context.Context, addr string, nodeID int64) (types.LogNodeClient, error)
+type logNodeCreatorFunc func(ctx context.Context, addr string, nodeID int64) (types.LogNodeClient, error)
 
-type LognodeManager interface {
+type lognodeManager interface {
 	// get log node client by channel name
-	GetChannelClient(channel string) (types.LogNodeClient, error)
+	GetChannelClient(channel string) (int64, types.LogNodeClient, error)
 	GetNodeClient(nodeID int64) (types.LogNodeClient, error)
 	UpdateDistribution(ctx context.Context) error
 	Close()
 }
 
 type nodeClient struct {
-	nodeID   int64
-	address  string
-	isClosed bool
-	client   types.LogNodeClient
+	nodeID  int64
+	address string
+	client  types.LogNodeClient
 }
 
-func (c *nodeClient) close() error {
-	if !c.isClosed {
+func (c *nodeClient) Close() error {
+	if c.client != nil {
 		err := c.client.Close()
 		if err != nil {
 			return err
 		}
-		c.isClosed = true
+		c.client = nil
 	}
 	return nil
 }
 
-func (c *nodeClient) getClient() (types.LogNodeClient, error) {
-	if c.isClosed {
-		return nil, errors.New("client is closed")
+func (c *nodeClient) GetNodeID() int64 {
+	return c.nodeID
+}
+
+func (c *nodeClient) GetClient() (types.LogNodeClient, error) {
+	if c.client == nil {
+		return nil, errors.New("client not exist, may closed")
 	}
 	return c.client, nil
 }
 
-type LognodeManagerImpl struct {
-	// nodeID -> NodeClient
+type lognodeManagerImpl struct {
+	// nodeID -> nodeClient
 	clients       map[UniqueID]*nodeClient
-	clientCreator LogNodeCreatorFunc
+	clientCreator logNodeCreatorFunc
 
-	// pchannel -> NodeClient
+	// pchannel -> nodeClient
 	channelDistribution map[string]*nodeClient
 	dc                  types.DataCoordClient
 
 	mu sync.RWMutex
 }
 
-func (m *LognodeManagerImpl) getNodeClient(nodeID int64) (types.LogNodeClient, error) {
+func (m *lognodeManagerImpl) GetNodeClient(nodeID int64) (types.LogNodeClient, error) {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	client, ok := m.clients[nodeID]
 	if !ok {
 		return nil, fmt.Errorf("can not find client of node %d", nodeID)
 	}
-	return client.getClient()
+	return client.GetClient()
 }
 
-func (m *LognodeManagerImpl) GetNodeClient(nodeID int64) (types.LogNodeClient, error) {
+func (m *lognodeManagerImpl) GetChannelClient(channel string) (int64, types.LogNodeClient, error) {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
 
-	return m.getNodeClient(nodeID)
-}
-
-func (m *LognodeManagerImpl) GetChannelClient(channel string) (types.LogNodeClient, error) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
-	client, ok := m.channelDistribution[channel]
+	node, ok := m.channelDistribution[channel]
 	if !ok {
-		return nil, merr.WrapErrChannelNotFound(channel, "channel log node not in distribution")
+		return 0, nil, merr.WrapErrChannelNotFound(channel, "channel log node not in distribution")
 	}
 
-	return client.getClient()
+	client, err := node.GetClient()
+	if err != nil {
+		return 0, nil, merr.WrapErrNodeNotAvailable(node.GetNodeID(), "get node client failed")
+	}
+
+	return node.GetNodeID(), client, nil
 }
 
-func (m *LognodeManagerImpl) updateClients(ctx context.Context, nodes []*logpb.LogNodeInfo) error {
+func (m *lognodeManagerImpl) updateClients(ctx context.Context, nodes []*logpb.LogNodeInfo) error {
 	newClients := make(map[UniqueID]*nodeClient)
 	for _, node := range nodes {
 		if client, ok := m.clients[node.NodeID]; ok {
@@ -126,7 +130,7 @@ func (m *LognodeManagerImpl) updateClients(ctx context.Context, nodes []*logpb.L
 
 	for _, client := range m.clients {
 		if client, ok := newClients[client.nodeID]; !ok {
-			if err := client.close(); err != nil {
+			if err := client.Close(); err != nil {
 				log.Warn("close invalid log node client failed", zap.Int64("nodeID", client.nodeID), zap.Error(err))
 				return err
 			}
@@ -136,7 +140,7 @@ func (m *LognodeManagerImpl) updateClients(ctx context.Context, nodes []*logpb.L
 	return nil
 }
 
-func (m *LognodeManagerImpl) UpdateDistribution(ctx context.Context) error {
+func (m *lognodeManagerImpl) UpdateDistribution(ctx context.Context) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 

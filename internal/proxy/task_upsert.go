@@ -120,7 +120,7 @@ func (it *upsertTask) setChannels() error {
 	if err != nil {
 		return err
 	}
-	channels, err := it.chMgr.getChannels(collID)
+	channels, err := it.chMgr.GetChannels(collID)
 	if err != nil {
 		return err
 	}
@@ -380,12 +380,7 @@ func (it *upsertTask) insertExecute(ctx context.Context, msgPack *msgstream.MsgP
 		zap.Int64("collectionID", collID))
 	getCacheDur := tr.RecordSpan()
 
-	_, err = it.chMgr.getOrCreateDmlStream(collID)
-	if err != nil {
-		return err
-	}
-	getMsgStreamDur := tr.RecordSpan()
-	channelNames, err := it.chMgr.getVChannels(collID)
+	channelNames, err := it.chMgr.GetVChannels(collID)
 	if err != nil {
 		log.Warn("get vChannels failed when insertExecute",
 			zap.Error(err))
@@ -399,16 +394,15 @@ func (it *upsertTask) insertExecute(ctx context.Context, msgPack *msgstream.MsgP
 		zap.Int64("collection_id", collID),
 		zap.Strings("virtual_channels", channelNames),
 		zap.Int64("task_id", it.ID()),
-		zap.Duration("get cache duration", getCacheDur),
-		zap.Duration("get msgStream duration", getMsgStreamDur))
+		zap.Duration("get cache duration", getCacheDur))
 
 	// assign segmentID for insert data and repack data by segmentID
 	var insertMsgPack *msgstream.MsgPack
-	if it.partitionKeys == nil {
-		insertMsgPack, err = repackInsertData(it.TraceCtx(), channelNames, it.upsertMsg.InsertMsg, it.result, it.idAllocator, it.segIDAssigner)
-	} else {
-		insertMsgPack, err = repackInsertDataWithPartitionKey(it.TraceCtx(), channelNames, it.partitionKeys, it.upsertMsg.InsertMsg, it.result, it.idAllocator, it.segIDAssigner)
-	}
+	// if it.partitionKeys == nil {
+	// 	insertMsgPack, err = repackInsertData(it.TraceCtx(), channelNames, it.upsertMsg.InsertMsg, it.result, it.idAllocator, it.segIDAssigner)
+	// } else {
+	// 	insertMsgPack, err = repackInsertDataWithPartitionKey(it.TraceCtx(), channelNames, it.partitionKeys, it.upsertMsg.InsertMsg, it.result, it.idAllocator, it.segIDAssigner)
+	// }
 	if err != nil {
 		log.Warn("assign segmentID and repack insert data failed when insertExecute",
 			zap.Error(err))
@@ -433,7 +427,7 @@ func (it *upsertTask) deleteExecute(ctx context.Context, msgPack *msgstream.MsgP
 	log := log.Ctx(ctx).With(
 		zap.Int64("collectionID", collID))
 	// hash primary keys to channels
-	channelNames, err := it.chMgr.getVChannels(collID)
+	channelNames, err := it.chMgr.GetVChannels(collID)
 	if err != nil {
 		log.Warn("get vChannels failed when deleteExecute", zap.Error(err))
 		it.result.Status = merr.Status(err)
@@ -513,10 +507,8 @@ func (it *upsertTask) Execute(ctx context.Context) (err error) {
 	log := log.Ctx(ctx).With(zap.String("collectionName", it.req.CollectionName))
 
 	tr := timerecord.NewTimeRecorder(fmt.Sprintf("proxy execute upsert %d", it.ID()))
-	stream, err := it.chMgr.getOrCreateDmlStream(it.collectionID)
-	if err != nil {
-		return err
-	}
+
+	var stream msgstream.MsgStream = nil
 	msgPack := &msgstream.MsgPack{
 		BeginTs: it.BeginTs(),
 		EndTs:   it.EndTs(),

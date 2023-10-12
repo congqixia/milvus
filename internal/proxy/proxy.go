@@ -244,7 +244,7 @@ func (node *Proxy) Init() error {
 	node.segAssigner.PeerID = paramtable.GetNodeID()
 	log.Debug("create segment id assigner done", zap.String("role", typeutil.ProxyRole), zap.Int64("ProxyID", paramtable.GetNodeID()))
 
-	dmlChannelsFunc := getDmlChannelsFunc(node.ctx, node.rootCoord)
+	dmlChannelsFunc := getChannelsFunc(node.ctx, node.rootCoord)
 	chMgr := newChannelsMgrImpl(dmlChannelsFunc, defaultInsertRepackFunc, node.factory)
 	node.chMgr = chMgr
 	log.Debug("create channels manager done", zap.String("role", typeutil.ProxyRole))
@@ -434,7 +434,7 @@ func (node *Proxy) Stop() error {
 	}
 
 	if node.chMgr != nil {
-		node.chMgr.removeAllDMLStream()
+		node.chMgr.RemoveAllChannel()
 	}
 
 	if node.lbPolicy != nil {
