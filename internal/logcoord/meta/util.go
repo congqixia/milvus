@@ -38,7 +38,7 @@ func getPChannelList() []string {
 	if params.CommonCfg.PreCreatedTopicEnabled.GetAsBool() {
 		return params.CommonCfg.TopicNames.GetAsStrings()
 	} else {
-		prefix := "rootcoord-dml"
+		prefix := params.CommonCfg.RootCoordDml.GetValue()
 		num := params.RootCoordCfg.DmlChannelNum.GetAsInt()
 		return genPChannelNames(prefix, num)
 	}

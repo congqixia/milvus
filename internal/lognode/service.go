@@ -106,6 +106,9 @@ func (node *LogNode) Insert(ctx context.Context, req *logpb.InsertRequest) (*com
 	msgs := lo.RepeatBy(len(req.Msgs),
 		func(i int) msgstream.TsMsg {
 			return &msgstream.InsertMsg{
+				BaseMsg: msgstream.BaseMsg{
+					HashValues: make([]uint32, len(req.GetMsgs()[i].GetRowIDs())),
+				},
 				InsertRequest: *req.Msgs[i],
 			}
 		})

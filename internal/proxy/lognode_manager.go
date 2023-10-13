@@ -22,6 +22,7 @@ import (
 	"sync"
 
 	"github.com/cockroachdb/errors"
+	lnClient "github.com/milvus-io/milvus/internal/distributed/lognode/client"
 	"github.com/milvus-io/milvus/internal/proto/datapb"
 	"github.com/milvus-io/milvus/internal/proto/logpb"
 	"github.com/milvus-io/milvus/internal/types"
@@ -32,12 +33,16 @@ import (
 
 type logNodeCreatorFunc func(ctx context.Context, addr string, nodeID int64) (types.LogNodeClient, error)
 
+func defaultLogNodeCreator(ctx context.Context, addr string, nodeID int64) (types.LogNodeClient, error) {
+	return lnClient.NewClient(ctx, addr, nodeID)
+}
+
 type lognodeManager interface {
 	// get log node client by channel name
 	GetChannelClient(channel string) (int64, types.LogNodeClient, error)
 	GetNodeClient(nodeID int64) (types.LogNodeClient, error)
 	UpdateDistribution(ctx context.Context) error
-	Close()
+	Close() error
 }
 
 type nodeClient struct {
@@ -78,6 +83,14 @@ type lognodeManagerImpl struct {
 	dc                  types.DataCoordClient
 
 	mu sync.RWMutex
+}
+
+func newLognodeManagerImpl(dc types.DataCoordClient) *lognodeManagerImpl {
+	return &lognodeManagerImpl{
+		dc:            dc,
+		clientCreator: defaultLogNodeCreator,
+	}
+
 }
 
 func (m *lognodeManagerImpl) GetNodeClient(nodeID int64) (types.LogNodeClient, error) {
@@ -154,6 +167,8 @@ func (m *lognodeManagerImpl) UpdateDistribution(ctx context.Context) error {
 		return err
 	}
 
+	log.Info("test", zap.Any("resp", resp))
+
 	err = m.updateClients(ctx, resp.NodeInfos)
 	if err != nil {
 		return err
@@ -170,5 +185,18 @@ func (m *lognodeManagerImpl) UpdateDistribution(ctx context.Context) error {
 		}
 	}
 
+	return nil
+}
+
+func (m *lognodeManagerImpl) Close() error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	for _, client := range m.clients {
+		err := client.Close()
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }

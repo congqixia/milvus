@@ -34,6 +34,7 @@ import (
 	"github.com/milvus-io/milvus/pkg/metrics"
 	"github.com/milvus-io/milvus/pkg/mq/msgstream"
 	"github.com/milvus-io/milvus/pkg/util/commonpbutil"
+	"github.com/milvus-io/milvus/pkg/util/funcutil"
 	"github.com/milvus-io/milvus/pkg/util/merr"
 	"github.com/milvus-io/milvus/pkg/util/paramtable"
 	"github.com/milvus-io/milvus/pkg/util/retry"
@@ -99,25 +100,24 @@ func getChannelsFunc(ctx context.Context, rc types.RootCoordClient) getChannelsF
 }
 
 type channelsMgrImpl struct {
-	nodes lognodeManager
+	nodeManager lognodeManager
 
 	mu    sync.RWMutex              // mutex of channel infos
 	infos map[UniqueID]channelInfos // collection id -> channel infos
 
 	getChannelsFunc getChannelsFuncType
-	repackFunc      repackFuncType
 }
 
 // NewChannelsMgrImpl constructs a channels manager.
 func newChannelsMgrImpl(
 	getDmlChannelsFunc getChannelsFuncType,
-	dmlRepackFunc repackFuncType,
 	msgStreamFactory msgstream.Factory,
+	lognodeManager lognodeManager,
 ) *channelsMgrImpl {
 	return &channelsMgrImpl{
 		infos:           make(map[UniqueID]channelInfos),
 		getChannelsFunc: getDmlChannelsFunc,
-		repackFunc:      dmlRepackFunc,
+		nodeManager:     lognodeManager,
 	}
 }
 
@@ -136,6 +136,7 @@ func (mgr *channelsMgrImpl) GetAllChannels(collectionID UniqueID) (channelInfos,
 	}
 
 	mgr.infos[collectionID] = info
+	incPChansMetrics(info.pchans)
 	return info, nil
 }
 
@@ -183,11 +184,11 @@ func (mgr *channelsMgrImpl) RemoveAllChannel() {
 }
 
 func (mgr *channelsMgrImpl) UpdateNodeInfo(ctx context.Context) error {
-	return mgr.nodes.UpdateDistribution(ctx)
+	return mgr.nodeManager.UpdateDistribution(ctx)
 }
 
 func (mgr *channelsMgrImpl) insert(ctx context.Context, channel string, msgs []*msgpb.InsertRequest) error {
-	nodeID, client, err := mgr.nodes.GetChannelClient(channel)
+	nodeID, client, err := mgr.nodeManager.GetChannelClient(channel)
 	if err != nil {
 		log.Warn("Insert msg to channel failed, channel client not found", zap.String("channel", channel))
 		return err
@@ -216,8 +217,9 @@ func (mgr *channelsMgrImpl) insert(ctx context.Context, channel string, msgs []*
 
 func (mgr *channelsMgrImpl) Insert(ctx context.Context, channelMsgs map[string][]*msgpb.InsertRequest) error {
 	for channel, msgs := range channelMsgs {
+		pchannel := funcutil.ToPhysicalChannel(channel)
 		err := retry.Do(ctx, func() error {
-			err := mgr.insert(ctx, channel, msgs)
+			err := mgr.insert(ctx, pchannel, msgs)
 			if err != nil {
 				mgr.UpdateNodeInfo(ctx)
 				return err

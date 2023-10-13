@@ -98,8 +98,9 @@ type Proxy struct {
 
 	metricsCacheManager *metricsinfo.MetricsCacheManager
 
-	session  *sessionutil.Session
-	shardMgr shardClientMgr
+	session    *sessionutil.Session
+	shardMgr   shardClientMgr
+	lognodeMgr lognodeManager
 
 	factory dependency.Factory
 
@@ -244,8 +245,14 @@ func (node *Proxy) Init() error {
 	node.segAssigner.PeerID = paramtable.GetNodeID()
 	log.Debug("create segment id assigner done", zap.String("role", typeutil.ProxyRole), zap.Int64("ProxyID", paramtable.GetNodeID()))
 
+	node.lognodeMgr = newLognodeManagerImpl(node.dataCoord)
+	err = node.lognodeMgr.UpdateDistribution(node.ctx)
+	if err != nil {
+		return err
+	}
+
 	dmlChannelsFunc := getChannelsFunc(node.ctx, node.rootCoord)
-	chMgr := newChannelsMgrImpl(dmlChannelsFunc, defaultInsertRepackFunc, node.factory)
+	chMgr := newChannelsMgrImpl(dmlChannelsFunc, node.factory, node.lognodeMgr)
 	node.chMgr = chMgr
 	log.Debug("create channels manager done", zap.String("role", typeutil.ProxyRole))
 
