@@ -38,6 +38,7 @@ import (
 	"github.com/milvus-io/milvus/pkg/util/merr"
 	"github.com/milvus-io/milvus/pkg/util/paramtable"
 	"github.com/milvus-io/milvus/pkg/util/retry"
+	"github.com/milvus-io/milvus/pkg/util/timerecord"
 )
 
 // channelsMgr manages the pchans, vchans
@@ -194,6 +195,7 @@ func (mgr *channelsMgrImpl) insert(ctx context.Context, channel string, msgs []*
 		return err
 	}
 
+	record := timerecord.NewTimeRecorder("produceInsert")
 	resp, err := client.Insert(ctx, &logpb.InsertRequest{
 		Base: commonpbutil.NewMsgBase(
 			commonpbutil.WithSourceID(paramtable.GetNodeID()),
@@ -203,6 +205,7 @@ func (mgr *channelsMgrImpl) insert(ctx context.Context, channel string, msgs []*
 		PChannels: []string{channel},
 	})
 
+	log.Info("test produce", zap.Duration("interval", record.ElapseSpan()))
 	if err != nil {
 		return err
 	}

@@ -21,7 +21,10 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/milvus-io/milvus/pkg/log"
 	"github.com/milvus-io/milvus/pkg/mq/msgstream"
+	"github.com/milvus-io/milvus/pkg/util/timerecord"
+	"go.uber.org/zap"
 )
 
 type WriteAheadLogger struct {
@@ -64,10 +67,12 @@ func (logger *WriteAheadLogger) Produce(ctx context.Context, pack *msgstream.Msg
 	logger.mu.Lock()
 	defer logger.mu.Unlock()
 
+	record := timerecord.NewTimeRecorder("produce")
 	err := logger.stream.Produce(pack)
 	if err != nil {
 		return err
 	}
+	log.Info("test produce", zap.Duration("interval", record.ElapseSpan()))
 
 	logger.lastTs.Store(pack.EndTs)
 	return nil

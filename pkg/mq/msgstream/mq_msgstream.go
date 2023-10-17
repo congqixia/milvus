@@ -249,33 +249,13 @@ func (ms *mqMsgStream) Produce(msgPack *MsgPack) error {
 	if len(ms.producers) <= 0 {
 		return errors.New("nil producer in msg stream")
 	}
-	tsMsgs := msgPack.Msgs
-	reBucketValues := ms.ComputeProduceChannelIndexes(msgPack.Msgs)
-	var result map[int32]*MsgPack
-	var err error
-	if ms.repackFunc != nil {
-		result, err = ms.repackFunc(tsMsgs, reBucketValues)
-	} else {
-		msgType := (tsMsgs[0]).Type()
-		switch msgType {
-		case commonpb.MsgType_Insert:
-			result, err = InsertRepackFunc(tsMsgs, reBucketValues)
-		case commonpb.MsgType_Delete:
-			result, err = DeleteRepackFunc(tsMsgs, reBucketValues)
-		default:
-			result, err = DefaultRepackFunc(tsMsgs, reBucketValues)
-		}
-	}
-	if err != nil {
-		return err
-	}
-	for k, v := range result {
-		channel := ms.producerChannels[k]
-		for i := 0; i < len(v.Msgs); i++ {
-			spanCtx, sp := MsgSpanFromCtx(v.Msgs[i].TraceCtx(), v.Msgs[i])
+
+	for _, producer := range ms.producers {
+		for i := 0; i < len(msgPack.Msgs); i++ {
+			spanCtx, sp := MsgSpanFromCtx(msgPack.Msgs[i].TraceCtx(), msgPack.Msgs[i])
 			defer sp.End()
 
-			mb, err := v.Msgs[i].Marshal(v.Msgs[i])
+			mb, err := msgPack.Msgs[i].Marshal(msgPack.Msgs[i])
 			if err != nil {
 				return err
 			}
@@ -289,7 +269,7 @@ func (ms *mqMsgStream) Produce(msgPack *MsgPack) error {
 			InjectCtx(spanCtx, msg.Properties)
 
 			ms.producerLock.Lock()
-			if _, err := ms.producers[channel].Send(spanCtx, msg); err != nil {
+			if _, err := producer.Send(spanCtx, msg); err != nil {
 				ms.producerLock.Unlock()
 				sp.RecordError(err)
 				return err
