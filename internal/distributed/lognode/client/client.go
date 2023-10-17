@@ -105,3 +105,9 @@ func (c *Client) Insert(ctx context.Context, req *logpb.InsertRequest, options .
 		return client.Insert(ctx, req, options...)
 	})
 }
+
+func (c *Client) Send(ctx context.Context, req *logpb.SendRequest, options ...grpc.CallOption) (*logpb.SendResponse, error) {
+	return wrapGrpcCall(ctx, c, func(client logpb.LogNodeClient) (*logpb.SendResponse, error) {
+		return client.Send(ctx, req, options...)
+	})
+}

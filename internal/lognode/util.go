@@ -17,10 +17,31 @@
 package lognode
 
 import (
+	"github.com/golang/protobuf/proto"
 	"github.com/milvus-io/milvus-proto/go-api/v2/commonpb"
+	"github.com/milvus-io/milvus/internal/proto/logpb"
+	"github.com/milvus-io/milvus/pkg/mq/msgstream"
+	"github.com/milvus-io/milvus/pkg/util/merr"
 	"github.com/milvus-io/milvus/pkg/util/paramtable"
 )
 
 func CheckTargetID[R interface{ GetBase() *commonpb.MsgBase }](req R) bool {
 	return req.GetBase().GetTargetID() == paramtable.GetNodeID()
+}
+
+func ParseTsMsg(payload []byte, msgType logpb.MessageType) (msgstream.TsMsg, error) {
+	switch msgType {
+	case logpb.MessageType_INSERT:
+		msg := &msgstream.InsertMsg{
+			BaseMsg: msgstream.BaseMsg{},
+		}
+		err := proto.Unmarshal(payload, &msg.InsertRequest)
+		if err != nil {
+			return nil, err
+		}
+		msg.BaseMsg.HashValues = make([]uint32, len(msg.InsertRequest.GetRowIDs()))
+		return msg, err
+	default:
+		return nil, merr.WrapErrParameterInvalid("msgtype", "undefineType")
+	}
 }

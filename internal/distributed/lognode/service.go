@@ -287,3 +287,7 @@ func (s *Server) UnwatchChannel(ctx context.Context, req *logpb.UnwatchChannelRe
 func (s *Server) Insert(ctx context.Context, req *logpb.InsertRequest) (*commonpb.Status, error) {
 	return s.lognode.Insert(ctx, req)
 }
+
+func (s *Server) Send(ctx context.Context, req *logpb.SendRequest) (*logpb.SendResponse, error) {
+	return s.lognode.Send(ctx, req)
+}

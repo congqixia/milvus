@@ -115,3 +115,36 @@ func (node *LogNode) Insert(ctx context.Context, req *logpb.InsertRequest) (*com
 	err = node.loggerManager.Produce(ctx, req.PChannels[0], msgs)
 	return merr.Status(err), nil
 }
+
+func (node *LogNode) Send(ctx context.Context, req *logpb.SendRequest) (*logpb.SendResponse, error) {
+	log.Debug("received Send Request",
+		zap.String("channel", req.GetChannelName()))
+
+	if !node.lifetime.Add(commonpbutil.IsHealthy) {
+		msg := fmt.Sprintf("log node %d is not ready", paramtable.GetNodeID())
+		err := merr.WrapErrServiceNotReady(msg)
+		return &logpb.SendResponse{
+			Status: merr.Status(err),
+		}, nil
+	}
+	defer node.lifetime.Done()
+
+	// err := merr.CheckTargetID(req.GetBase())
+	// if err != nil {
+	// 	log.Warn("target ID not match",
+	// 		zap.Int64("targetID", req.GetBase().GetTargetID()),
+	// 		zap.Int64("nodeID", paramtable.GetNodeID()),
+	// 	)
+	// 	return merr.Status(err), nil
+	// }
+
+	msgs := lo.RepeatBy(len(req.Payloads),
+		func(i int) msgstream.TsMsg {
+			msg, _ := ParseTsMsg(req.Payloads[i], req.MessageType) // TODO ERROR
+			return msg
+		})
+	err := node.loggerManager.Produce(ctx, req.GetChannelName(), msgs)
+	return &logpb.SendResponse{
+		Status: merr.Status(err),
+	}, nil
+}

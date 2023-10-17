@@ -8,17 +8,28 @@ import "common.proto";
 import "milvus.proto";
 import "msg.proto";
 
+enum PChannelState {
+    Unused = 0;
+    Waitting = 1;
+    Watching = 2;    
+}
+
+enum MessageType {
+    TIME_TICK = 0;
+    INSERT = 1;
+    DELETE = 2;
+    CREATE_COLLECTION = 3;
+    DROP_COLLECTION = 4;
+    CREATE_PARTITION = 5;
+    DROP_PARTITION = 6;
+}
+
 service LogNode {
     rpc GetComponentStates(milvus.GetComponentStatesRequest) returns (milvus.ComponentStates) {}
     rpc WatchChannel(WatchChannelRequest)returns (common.Status){};
     rpc UnwatchChannel(UnwatchChannelRequest)returns (common.Status){};
     rpc Insert(InsertRequest)returns (common.Status){};
-}
-
-enum PChannelState {
-    Unused = 0;
-    Waitting = 1;
-    Watching = 2;    
+    rpc Send(SendRequest) returns (SendResponse) {};
 }
 
 message PChannelInfo {
@@ -47,3 +58,16 @@ message InsertRequest{
     repeated msg.InsertRequest msgs = 2;
     repeated string pChannels = 3;
 }
+
+message SendRequest {
+    string channel_name = 1; // a topic name, and also a pchannel(topic) name
+    repeated bytes  payloads = 2; // message entity
+    MessageType message_type = 3; // message type
+    map<string, string> header = 4; // message properties
+  }
+  
+  message SendResponse {
+    common.Status status = 1;
+    int64 offset = 2; // the offset of the message in the pchannel(topic)
+    int64 timestamp = 3; // the timestamp of the message that is produced by tso
+  }

@@ -25,6 +25,7 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/golang/protobuf/proto"
 	"github.com/milvus-io/milvus-proto/go-api/v2/commonpb"
 	"github.com/milvus-io/milvus-proto/go-api/v2/milvuspb"
 	"github.com/milvus-io/milvus-proto/go-api/v2/msgpb"
@@ -189,20 +190,33 @@ func (mgr *channelsMgrImpl) UpdateNodeInfo(ctx context.Context) error {
 }
 
 func (mgr *channelsMgrImpl) insert(ctx context.Context, channel string, msgs []*msgpb.InsertRequest) error {
-	nodeID, client, err := mgr.nodeManager.GetChannelClient(channel)
+	_, client, err := mgr.nodeManager.GetChannelClient(channel)
 	if err != nil {
 		log.Warn("Insert msg to channel failed, channel client not found", zap.String("channel", channel))
 		return err
 	}
 
 	record := timerecord.NewTimeRecorder("produceInsert")
-	resp, err := client.Insert(ctx, &logpb.InsertRequest{
-		Base: commonpbutil.NewMsgBase(
-			commonpbutil.WithSourceID(paramtable.GetNodeID()),
-			commonpbutil.WithTargetID(nodeID),
-		),
-		Msgs:      msgs,
-		PChannels: []string{channel},
+	// resp, err := client.Insert(ctx, &logpb.InsertRequest{
+	// 	Base: commonpbutil.NewMsgBase(
+	// 		commonpbutil.WithSourceID(paramtable.GetNodeID()),
+	// 		commonpbutil.WithTargetID(nodeID),
+	// 	),
+	// 	Msgs:      msgs,
+	// 	PChannels: []string{channel},
+	// })
+	payloads := [][]byte{}
+	for _, msg := range msgs {
+		payload, err := proto.Marshal(msg)
+		if err != nil {
+			return err
+		}
+		payloads = append(payloads, payload)
+	}
+	resp, err := client.Send(ctx, &logpb.SendRequest{
+		ChannelName: channel,
+		Payloads:    payloads,
+		MessageType: logpb.MessageType_INSERT,
 	})
 
 	log.Info("test produce", zap.Duration("interval", record.ElapseSpan()))
@@ -210,7 +224,7 @@ func (mgr *channelsMgrImpl) insert(ctx context.Context, channel string, msgs []*
 		return err
 	}
 
-	err = merr.Error(resp)
+	err = merr.Error(resp.GetStatus())
 	if err != nil {
 		return err
 	}
