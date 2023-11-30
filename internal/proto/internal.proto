@@ -247,3 +247,14 @@ message Rate {
   RateType rt = 1;
   double r = 2;
 }
+
+message ReadVariableRequest {
+  common.MsgBase base = 1;
+  string path = 2;
+}
+
+message ReadVariableResponse {
+  common.Status status = 1;
+  string type = 2;
+  string value = 3;
+}

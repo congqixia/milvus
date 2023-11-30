@@ -97,6 +97,8 @@ service DataNode {
   rpc GetComponentStates(milvus.GetComponentStatesRequest) returns (milvus.ComponentStates) {}
   rpc GetStatisticsChannel(internal.GetStatisticsChannelRequest) returns (milvus.StringResponse) {}
 
+  rpc ReadVariable(internal.ReadVariableRequest) returns (internal.ReadVariableResponse) {}
+
   rpc WatchDmChannels(WatchDmChannelsRequest) returns (common.Status) {}
   rpc FlushSegments(FlushSegmentsRequest) returns(common.Status) {}
 

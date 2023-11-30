@@ -379,3 +379,7 @@ func (s *Server) NotifyChannelOperation(ctx context.Context, req *datapb.Channel
 func (s *Server) CheckChannelOperationProgress(ctx context.Context, req *datapb.ChannelWatchInfo) (*datapb.ChannelOperationProgressResponse, error) {
 	return s.datanode.CheckChannelOperationProgress(ctx, req)
 }
+
+func (s *Server) ReadVariable(ctx context.Context, req *internalpb.ReadVariableRequest) (*internalpb.ReadVariableResponse, error) {
+	return nil, nil
+}

@@ -161,6 +161,14 @@ func (node *DataNode) GetStatisticsChannel(ctx context.Context, req *internalpb.
 	}, nil
 }
 
+func (node *DataNode) ReadVariable(ctx context.Context, req *internalpb.ReadVariableRequest) (*internalpb.ReadVariableResponse, error) {
+	// component := reflect.ValueOf(node).Elem()
+
+	// ele := component.FieldByName(req.GetPath())
+
+	return &internalpb.ReadVariableResponse{}, nil
+}
+
 // ShowConfigurations returns the configurations of DataNode matching req.Pattern
 func (node *DataNode) ShowConfigurations(ctx context.Context, req *internalpb.ShowConfigurationsRequest) (*internalpb.ShowConfigurationsResponse, error) {
 	log.Debug("DataNode.ShowConfigurations", zap.String("pattern", req.Pattern))
