@@ -114,6 +114,9 @@ func (b *ScoreBasedBalancer) calculatePriority(collectionID, nodeID int64) int {
 
 	// calculate collection growing segment row count
 	collectionViews := b.dist.LeaderViewManager.GetByCollectionAndNode(collectionID, nodeID)
+	if len(collectionViews) > 0 {
+		collectionRowCount = int(float64(collectionRowCount) * (params.Params.QueryCoordCfg.DelegatorPriorityFactor.GetAsFloat()))
+	}
 	for _, view := range collectionViews {
 		collectionRowCount += int(view.NumOfGrowingRows)
 	}
