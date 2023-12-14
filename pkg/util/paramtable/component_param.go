@@ -1243,6 +1243,7 @@ type queryCoordConfig struct {
 	OverloadedMemoryThresholdPercentage ParamItem `refreshable:"true"`
 	BalanceIntervalSeconds              ParamItem `refreshable:"true"`
 	MemoryUsageMaxDifferencePercentage  ParamItem `refreshable:"true"`
+	DelegatorPriorityFactor             ParamItem `refreshable:"true"`
 
 	SegmentCheckInterval       ParamItem `refreshable:"true"`
 	ChannelCheckInterval       ParamItem `refreshable:"true"`
@@ -1405,6 +1406,14 @@ func (p *queryCoordConfig) init(base *BaseTable) {
 		Export:       true,
 	}
 	p.MemoryUsageMaxDifferencePercentage.Init(base.mgr)
+
+	p.DelegatorPriorityFactor = ParamItem{
+		Key:          "queryCoord.delegatorBalancePriorityFactor",
+		Version:      "2.3.4",
+		DefaultValue: "2.0",
+		PanicIfEmpty: true,
+		Export:       true,
+	}
 
 	p.CheckInterval = ParamItem{
 		Key:          "queryCoord.checkInterval",
