@@ -1414,6 +1414,7 @@ func (p *queryCoordConfig) init(base *BaseTable) {
 		PanicIfEmpty: true,
 		Export:       true,
 	}
+	p.DelegatorPriorityFactor.Init(base.mgr)
 
 	p.CheckInterval = ParamItem{
 		Key:          "queryCoord.checkInterval",
