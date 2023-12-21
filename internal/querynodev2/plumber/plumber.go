@@ -105,6 +105,11 @@ func PlumberSearch(ctx context.Context, req *querypb.SearchRequest) (*internalpb
 
 	bs, ok := cachedSearchData.Get(tag)
 	if !ok {
+		var err error
+		bs, err = getSearchResult(tag, collectionID, topk, nq, outputFieldIDs)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	searchResults := &internalpb.SearchResults{
