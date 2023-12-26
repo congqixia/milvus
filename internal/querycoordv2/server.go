@@ -24,9 +24,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/blang/semver/v4"
 	"github.com/cockroachdb/errors"
-	"github.com/samber/lo"
 	"github.com/tikv/client-go/v2/txnkv"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.uber.org/atomic"
@@ -829,21 +827,24 @@ func (s *Server) updateBalanceConfigLoop(ctx context.Context) {
 }
 
 func (s *Server) updateBalanceConfig() bool {
-	log := log.Ctx(s.ctx).WithRateGroup("qcv2.updateBalanceConfigLoop", 1, 60)
-	r := semver.MustParseRange("<2.3.0")
-	sessions, _, err := s.session.GetSessionsWithVersionRange(typeutil.QueryNodeRole, r)
-	if err != nil {
-		log.Warn("check query node version occur error on etcd", zap.Error(err))
-		return false
-	}
+	/*
+		log := log.Ctx(s.ctx).WithRateGroup("qcv2.updateBalanceConfigLoop", 1, 60)
+		r := semver.MustParseRange("<2.3.0")
+		sessions, _, err := s.session.GetSessionsWithVersionRange(typeutil.QueryNodeRole, r)
+		if err != nil {
+			log.Warn("check query node version occur error on etcd", zap.Error(err))
+			return false
+		}*/
 
-	if len(sessions) == 0 {
-		// only balance channel when all query node's version >= 2.3.0
-		Params.Save(Params.QueryCoordCfg.AutoBalance.Key, "true")
-		log.Info("all old query node down, enable auto balance!")
-		return true
-	}
+	/*
+		if len(sessions) == 0 {
+			// only balance channel when all query node's version >= 2.3.0
+			Params.Save(Params.QueryCoordCfg.AutoBalance.Key, "true")
+			log.Info("all old query node down, enable auto balance!")
+			return true
+		}
 
-	log.RatedDebug(10, "old query node exist", zap.Strings("sessions", lo.Keys(sessions)))
-	return false
+		log.RatedDebug(10, "old query node exist", zap.Strings("sessions", lo.Keys(sessions)))
+		return false*/
+	return true
 }
