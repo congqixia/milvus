@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"sort"
 
 	"github.com/golang/protobuf/proto"
@@ -16,6 +17,7 @@ import (
 	"github.com/milvus-io/milvus/pkg/util/merr"
 	"github.com/milvus-io/milvus/pkg/util/typeutil"
 	"github.com/samber/lo"
+	"go.uber.org/zap"
 )
 
 var (
@@ -54,8 +56,10 @@ func Register(collID int64, coll *schemapb.CollectionSchema) {
 			// ignore system fields
 			continue
 		}
-
-		mockData.Insert(field.GetFieldID(), generateMockData(field))
+		md := generateMockData(field)
+		if md != nil {
+			mockData.Insert(field.GetFieldID(), md)
+		}
 	}
 
 	collSearchMeta.Insert(collID, &SearchMeta{
@@ -78,6 +82,26 @@ func generateMockData(field *schemapb.FieldSchema) *schemapb.FieldData {
 			Scalars: &schemapb.ScalarField{
 				Data: &schemapb.ScalarField_LongData{
 					LongData: &schemapb.LongArray{
+						Data: data,
+					},
+				},
+			},
+		}
+		fieldData.Field = field
+	case schemapb.DataType_FloatVector:
+		dim, err := typeutil.GetDim(field)
+		if err != nil {
+			log.Warn("failed to get dimension from schema", zap.Error(err))
+			return nil
+		}
+		data := lo.RepeatBy(int(10000*dim), func(idx int) float32 {
+			return rand.Float32()
+		})
+		field := &schemapb.FieldData_Vectors{
+			Vectors: &schemapb.VectorField{
+				Dim: dim,
+				Data: &schemapb.VectorField_FloatVector{
+					FloatVector: &schemapb.FloatArray{
 						Data: data,
 					},
 				},
@@ -148,12 +172,13 @@ func getSearchResult(tag string, collectionID, topk, nq int64, outputFieldIDs []
 		}
 
 		for _, field := range outputFieldIDs {
-
 			data, ok := searchMeta.MockData.Get(field)
 			if !ok {
 				return nil, errors.New("plumber not supported field")
 			}
-			resultData.FieldsData = append(resultData.FieldsData, sliceFieldData(data, int(topk)))
+			for i := 0; i < int(nq); i++ {
+				resultData.FieldsData = append(resultData.FieldsData, sliceFieldData(data, int(topk)))
+			}
 		}
 		slicedBlob, err := proto.Marshal(resultData)
 		if err != nil {
@@ -182,6 +207,20 @@ func sliceFieldData(fd *schemapb.FieldData, length int) *schemapb.FieldData {
 				Data: &schemapb.ScalarField_LongData{
 					LongData: &schemapb.LongArray{
 						Data: fd.GetScalars().GetLongData().GetData()[:length],
+					},
+				},
+			},
+		}
+		fieldData.Field = field
+		return fieldData
+	case schemapb.DataType_FloatVector:
+		dim := fd.GetVectors().GetDim()
+		field := &schemapb.FieldData_Vectors{
+			Vectors: &schemapb.VectorField{
+				Dim: dim,
+				Data: &schemapb.VectorField_FloatVector{
+					FloatVector: &schemapb.FloatArray{
+						Data: fd.GetVectors().GetFloatVector().GetData()[:int(dim)*length],
 					},
 				},
 			},

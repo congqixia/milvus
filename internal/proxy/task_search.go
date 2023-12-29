@@ -342,15 +342,16 @@ func (t *searchTask) PreExecute(ctx context.Context) error {
 		t.SearchRequest.MetricType = queryInfo.GetMetricType()
 		t.SearchRequest.DslType = commonpb.DslType_BoolExprV1
 
-		estimateSize, err := t.estimateResultSize(nq, t.SearchRequest.Topk)
-		if err != nil {
-			log.Warn("failed to estimate result size", zap.Error(err))
-			return err
-		}
-		if estimateSize >= requeryThreshold {
-			t.requery = true
-			plan.OutputFieldIds = nil
-		}
+		/*
+			estimateSize, err := t.estimateResultSize(nq, t.SearchRequest.Topk)
+			if err != nil {
+				log.Warn("failed to estimate result size", zap.Error(err))
+				return err
+			}
+			if estimateSize >= requeryThreshold {
+				t.requery = true
+				plan.OutputFieldIds = nil
+			}*/
 
 		t.SearchRequest.SerializedExprPlan, err = proto.Marshal(plan)
 		if err != nil {
@@ -650,7 +651,7 @@ func (t *searchTask) Requery() error {
 	for i := 0; i < typeutil.GetSizeOfIDs(ids); i++ {
 		id := typeutil.GetPK(ids, int64(i))
 		if _, ok := offsets[id]; !ok {
-			return fmt.Errorf("incomplete query result, missing id %s, len(searchIDs) = %d, len(queryIDs) = %d, collection=%d",
+			return fmt.Errorf("incomplete query result, missing id %v, len(searchIDs) = %d, len(queryIDs) = %d, collection=%d",
 				id, typeutil.GetSizeOfIDs(ids), len(offsets), t.GetCollectionID())
 		}
 		typeutil.AppendFieldData(t.result.Results.FieldsData, queryResult.GetFieldsData(), int64(offsets[id]))
