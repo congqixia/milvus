@@ -245,6 +245,20 @@ var (
 			Buckets:   buckets, // unit: ms
 		}, []string{nodeIDLabelName, functionLabelName})
 
+	// RestfulV1SearchReqLatency records the latency for restful v1 search
+	RestfulV1SearchReqLatency = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Namespace: milvusNamespace,
+			Subsystem: typeutil.ProxyRole,
+			Name:      "restful_req_latency",
+			Help:      "latency of each request",
+			Buckets:   buckets, // unit: ms
+		}, []string{"phase"})
+
+	PhaseDecode = "decode"
+	PhaseSearch = "search"
+	PhaseEncode = "encode"
+
 	// ProxyReceiveBytes record the received bytes of messages in Proxy
 	ProxyReceiveBytes = prometheus.NewCounterVec(
 		prometheus.CounterOpts{

@@ -2,9 +2,9 @@ package httpserver
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/cockroachdb/errors"
 	"github.com/gin-gonic/gin"
@@ -17,10 +17,12 @@ import (
 	"github.com/milvus-io/milvus-proto/go-api/v2/commonpb"
 	"github.com/milvus-io/milvus-proto/go-api/v2/milvuspb"
 	"github.com/milvus-io/milvus-proto/go-api/v2/schemapb"
+	"github.com/milvus-io/milvus/internal/json"
 	"github.com/milvus-io/milvus/internal/proxy"
 	"github.com/milvus-io/milvus/internal/types"
 	"github.com/milvus-io/milvus/pkg/common"
 	"github.com/milvus-io/milvus/pkg/log"
+	"github.com/milvus-io/milvus/pkg/metrics"
 	"github.com/milvus-io/milvus/pkg/util/merr"
 	"github.com/milvus-io/milvus/pkg/util/metric"
 	"github.com/milvus-io/milvus/pkg/util/requestutil"
@@ -858,6 +860,7 @@ func (h *HandlersV1) upsert(c *gin.Context) {
 }
 
 func (h *HandlersV1) search(c *gin.Context) {
+	phaseDecodeBegin := time.Now()
 	httpReq := SearchReq{
 		DbName: DefaultDbName,
 		Limit:  100,
@@ -917,6 +920,11 @@ func (h *HandlersV1) search(c *gin.Context) {
 		GuaranteeTimestamp: BoundedTimestamp,
 		Nq:                 int64(1),
 	}
+	phaseDecodeEnd := time.Now()
+	metrics.RestfulV1SearchReqLatency.WithLabelValues(
+		metrics.PhaseDecode,
+	).Observe(float64(phaseDecodeEnd.Sub(phaseDecodeBegin).Milliseconds()))
+
 	username, _ := c.Get(ContextUsername)
 	ctx := proxy.NewContextWithMetadata(c, username.(string), req.DbName)
 	response, err := h.executeRestRequestInterceptor(ctx, c, req, func(reqCtx context.Context, req any) (any, error) {
@@ -928,6 +936,11 @@ func (h *HandlersV1) search(c *gin.Context) {
 	if err == nil {
 		err = merr.Error(response.(*milvuspb.SearchResults).GetStatus())
 	}
+	phaseSearchEnd := time.Now()
+	metrics.RestfulV1SearchReqLatency.WithLabelValues(
+		metrics.PhaseSearch,
+	).Observe(float64(phaseSearchEnd.Sub(phaseDecodeEnd).Milliseconds()))
+
 	if err != nil {
 		c.JSON(http.StatusOK, gin.H{HTTPReturnCode: merr.Code(err), HTTPReturnMessage: err.Error()})
 	} else {
@@ -948,4 +961,8 @@ func (h *HandlersV1) search(c *gin.Context) {
 			}
 		}
 	}
+	phaseEncodeEnd := time.Now()
+	metrics.RestfulV1SearchReqLatency.WithLabelValues(
+		metrics.PhaseEncode,
+	).Observe(float64(phaseEncodeEnd.Sub(phaseSearchEnd).Milliseconds()))
 }
