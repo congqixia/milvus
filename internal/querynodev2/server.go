@@ -336,12 +336,19 @@ func (node *QueryNode) Init() error {
 				}
 			}
 
-			client, err := grpcquerynodeclient.NewClient(node.ctx, addr, nodeID)
-			if err != nil {
-				return nil, err
-			}
+			// client, err := grpcquerynodeclient.NewClient(node.ctx, addr, nodeID)
+			// if err != nil {
+			// 	return nil, err
+			// }
 
-			return cluster.NewRemoteWorker(client), nil
+			// return cluster.NewRemoteWorker(client), nil
+			return cluster.NewPoolingRemoteWorker(func() types.QueryNodeClient {
+				client, err := grpcquerynodeclient.NewClient(node.ctx, addr, nodeID)
+				if err != nil {
+					return nil
+				}
+				return client
+			}), nil
 		})
 		node.delegators = typeutil.NewConcurrentMap[string, delegator.ShardDelegator]()
 		node.subscribingChannels = typeutil.NewConcurrentSet[string]()

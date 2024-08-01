@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/cockroachdb/errors"
+	"go.uber.org/atomic"
 	"go.uber.org/zap"
 
 	"github.com/milvus-io/milvus/internal/registry"
@@ -32,9 +33,17 @@ type shardClient struct {
 	client   types.QueryNodeClient
 	isClosed bool
 	refCnt   int
+	clients  []types.QueryNodeClient
+	idx      atomic.Int64
+	pooling  bool
 }
 
 func (n *shardClient) getClient(ctx context.Context) (types.QueryNodeClient, error) {
+	if n.pooling {
+		// return n.pool.Get().(types.QueryNodeClient), nil
+		idx := n.idx.Inc()
+		return n.clients[int(idx)%len(n.clients)], nil
+	}
 	n.RLock()
 	defer n.RUnlock()
 	if n.isClosed {
@@ -94,6 +103,24 @@ func newShardClient(info *nodeInfo, client types.QueryNodeClient) *shardClient {
 		refCnt: 1,
 	}
 	return ret
+}
+
+func newPoolingShardClient(info *nodeInfo, creator queryNodeCreatorFunc) *shardClient {
+	num := 100
+	clients := make([]types.QueryNodeClient, 0, num)
+	for i := 0; i < 100; i++ {
+		client, _ := creator(context.Background(), info.address, info.nodeID)
+		clients = append(clients, client)
+	}
+	return &shardClient{
+		info: nodeInfo{
+			nodeID:  info.nodeID,
+			address: info.address,
+		},
+		refCnt:  1,
+		pooling: true,
+		clients: clients,
+	}
 }
 
 type shardClientMgr interface {
@@ -182,11 +209,7 @@ func (c *shardClientMgrImpl) UpdateShardLeaders(oldLeaders map[string][]nodeInfo
 			if c.clientCreator == nil {
 				return fmt.Errorf("clientCreator function is nil")
 			}
-			shardClient, err := c.clientCreator(context.Background(), node.address, node.nodeID)
-			if err != nil {
-				return err
-			}
-			client := newShardClient(node, shardClient)
+			client := newPoolingShardClient(node, c.clientCreator)
 			c.clients.data[node.nodeID] = client
 		}
 	}
