@@ -33,6 +33,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/experimental"
 	"google.golang.org/grpc/keepalive"
 
 	"github.com/milvus-io/milvus-proto/go-api/v2/commonpb"
@@ -298,6 +299,7 @@ func (c *ClientBase[T]) connect(ctx context.Context) error {
 			grpc.FailOnNonTempDialError(true),
 			grpc.WithReturnConnectionError(),
 			grpc.WithDisableRetry(),
+			experimental.WithRecvBufferPool(grpc.NewSharedBufferPool()),
 		)
 	} else {
 		conn, err = grpc.DialContext(
@@ -338,6 +340,7 @@ func (c *ClientBase[T]) connect(ctx context.Context) error {
 			grpc.FailOnNonTempDialError(true),
 			grpc.WithReturnConnectionError(),
 			grpc.WithDisableRetry(),
+			experimental.WithRecvBufferPool(grpc.NewSharedBufferPool()),
 		)
 	}
 
