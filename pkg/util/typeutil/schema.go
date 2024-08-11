@@ -256,14 +256,14 @@ type SchemaHelper struct {
 	idOffset           map[int64]int
 	primaryKeyOffset   int
 	partitionKeyOffset int
+	loadFields         Set[int64]
 }
 
-// CreateSchemaHelper returns a new SchemaHelper object
-func CreateSchemaHelper(schema *schemapb.CollectionSchema) (*SchemaHelper, error) {
+func CreateSchemaHelperWithLoadFields(schema *schemapb.CollectionSchema, loadFields []int64) (*SchemaHelper, error) {
 	if schema == nil {
 		return nil, errors.New("schema is nil")
 	}
-	schemaHelper := SchemaHelper{schema: schema, nameOffset: make(map[string]int), idOffset: make(map[int64]int), primaryKeyOffset: -1, partitionKeyOffset: -1}
+	schemaHelper := SchemaHelper{schema: schema, nameOffset: make(map[string]int), idOffset: make(map[int64]int), primaryKeyOffset: -1, partitionKeyOffset: -1, loadFields: NewSet(loadFields...)}
 	for offset, field := range schema.Fields {
 		if _, ok := schemaHelper.nameOffset[field.Name]; ok {
 			return nil, fmt.Errorf("duplicated fieldName: %s", field.Name)
@@ -288,6 +288,11 @@ func CreateSchemaHelper(schema *schemapb.CollectionSchema) (*SchemaHelper, error
 		}
 	}
 	return &schemaHelper, nil
+}
+
+// CreateSchemaHelper returns a new SchemaHelper object
+func CreateSchemaHelper(schema *schemapb.CollectionSchema) (*SchemaHelper, error) {
+	return CreateSchemaHelperWithLoadFields(schema, nil)
 }
 
 // GetPrimaryKeyField returns the schema of the primary key
@@ -321,7 +326,20 @@ func (helper *SchemaHelper) GetFieldFromNameDefaultJSON(fieldName string) (*sche
 	if !ok {
 		return helper.getDefaultJSONField(fieldName)
 	}
-	return helper.schema.Fields[offset], nil
+	fieldSchema := helper.schema.Fields[offset]
+	if !helper.IsFieldLoaded(fieldSchema.GetFieldID()) {
+		return nil, errors.Newf("field %s is not loaded", fieldSchema)
+	}
+	return fieldSchema, nil
+}
+
+// GetFieldFromNameDefaultJSON returns whether is field loaded.
+// If load fields is not provided, treated as loaded
+func (helper *SchemaHelper) IsFieldLoaded(fieldID int64) bool {
+	if len(helper.loadFields) == 0 {
+		return true
+	}
+	return helper.loadFields.Contain(fieldID)
 }
 
 func (helper *SchemaHelper) getDefaultJSONField(fieldName string) (*schemapb.FieldSchema, error) {
