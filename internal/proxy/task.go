@@ -1612,7 +1612,7 @@ func (t *loadCollectionTask) Execute(ctx context.Context) (err error) {
 	}
 	// prepare load field list
 	// TODO use load collection load field list after proto merged
-	loadFields, err := collSchema.GetLoadFieldIDs(nil)
+	loadFields, err := collSchema.GetLoadFieldIDs(t.GetLoadFields(), t.GetSkipLoadDynamicField())
 	if err != nil {
 		return err
 	}
@@ -1863,8 +1863,7 @@ func (t *loadPartitionsTask) Execute(ctx context.Context) error {
 		return err
 	}
 	// prepare load field list
-	// TODO use load collection load field list after proto merged
-	loadFields, err := collSchema.GetLoadFieldIDs(nil)
+	loadFields, err := collSchema.GetLoadFieldIDs(t.GetLoadFields(), t.GetSkipLoadDynamicField())
 	if err != nil {
 		return err
 	}
