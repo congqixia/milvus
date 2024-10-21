@@ -33,6 +33,10 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/apache/arrow/go/v12/arrow"
+	"github.com/apache/arrow/go/v12/arrow/array"
+	"github.com/apache/arrow/go/v12/arrow/cdata"
+	"github.com/apache/arrow/go/v12/arrow/memory"
 	"github.com/cockroachdb/errors"
 	"go.opentelemetry.io/otel"
 	"go.uber.org/atomic"
@@ -679,7 +683,39 @@ func (s *LocalSegment) Delete(ctx context.Context, primaryKeys storage.PrimaryKe
 	}
 	defer s.ptrLock.RUnlock()
 
-	var err error
+	cTimestampsPtr := (*C.uint64_t)(&(timestamps)[0])
+
+	var pkArr arrow.Array
+
+	pkType := primaryKeys[0].Type()
+	switch pkType {
+	case schemapb.DataType_Int64:
+		bldr := array.NewInt64Builder(memory.DefaultAllocator)
+		defer bldr.Release()
+		bldr.Reserve(len(primaryKeys))
+		for _, pk := range primaryKeys {
+			bldr.Append(pk.(*storage.Int64PrimaryKey).Value)
+		}
+		pkArr = bldr.NewArray()
+	case schemapb.DataType_VarChar:
+		bldr := array.NewStringBuilder(memory.DefaultAllocator)
+		defer bldr.Release()
+		bldr.Reserve(len(primaryKeys))
+		for _, pk := range primaryKeys {
+			bldr.Append(pk.(*storage.VarCharPrimaryKey).Value)
+		}
+		pkArr = bldr.NewArray()
+	default:
+		return fmt.Errorf("invalid data type of primary keys")
+	}
+
+	defer pkArr.Release()
+
+	var cschema cdata.CArrowSchema
+	var carr cdata.CArrowArray
+	cdata.ExportArrowArray(pkArr, &carr, &cschema)
+
+	var status C.CStatus
 	GetDynamicPool().Submit(func() (any, error) {
 		start := time.Now()
 		defer func() {
@@ -689,10 +725,11 @@ func (s *LocalSegment) Delete(ctx context.Context, primaryKeys storage.PrimaryKe
 				"Sync",
 			).Observe(float64(time.Since(start).Milliseconds()))
 		}()
-		_, err = s.csegment.Delete(ctx, &segcore.DeleteRequest{
-			PrimaryKeys: primaryKeys,
-			Timestamps:  timestamps,
-		})
+		status = C.DeleteArray(s.ptr,
+			(C.CArrowArray)(unsafe.Pointer(&carr)),
+			(C.CArrowSchema)(unsafe.Pointer(&cschema)),
+			cTimestampsPtr,
+		)
 		return nil, nil
 	}).Await()
 
