@@ -207,7 +207,7 @@ func (st *statsTask) sortSegment(ctx context.Context) ([]*datapb.FieldBinlog, er
 
 	sortStart := time.Now()
 	sort.Slice(values, func(i, j int) bool {
-		return values[i].PK.LT(values[j].PK)
+		return values[i].PK.LT(values[j].PK) && values[i].Timestamp < values[j].Timestamp
 	})
 	sortTimeCost += time.Since(sortStart)
 
