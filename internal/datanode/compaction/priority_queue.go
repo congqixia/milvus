@@ -13,7 +13,7 @@ type PriorityQueue []*PQItem
 func (pq PriorityQueue) Len() int { return len(pq) }
 
 func (pq PriorityQueue) Less(i, j int) bool {
-	return pq[i].Value.PK.LT(pq[j].Value.PK) && pq[i].Value.Timestamp < pq[j].Value.Timestamp
+	return pq[i].Value.PK.LT(pq[j].Value.PK) || (pq[i].Value.PK.EQ(pq[j].Value.PK) && pq[i].Value.Timestamp < pq[j].Value.Timestamp)
 }
 
 func (pq PriorityQueue) Swap(i, j int) {
