@@ -210,7 +210,7 @@ func NewBinlogRecordReader(ctx context.Context, binlogs []*datapb.FieldBinlog, s
 			for j, binlog := range binlogs {
 				logPath := binlog.GetLogPath()
 				if paramtable.Get().CommonCfg.StorageType.GetValue() != "local" {
-					path.Join(rwOptions.bucketName, logPath)
+					logPath = path.Join(rwOptions.bucketName, logPath)
 				}
 				log.Warn("CQX", zap.String("logPath", logPath), zap.Int64("version", rwOptions.version))
 				paths[j] = append(paths[j], logPath)
