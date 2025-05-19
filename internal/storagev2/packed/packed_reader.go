@@ -31,9 +31,13 @@ import (
 
 	"github.com/apache/arrow/go/v17/arrow"
 	"github.com/apache/arrow/go/v17/arrow/cdata"
+	"go.uber.org/zap"
+
+	"github.com/milvus-io/milvus/pkg/v2/log"
 )
 
 func NewPackedReader(filePaths []string, schema *arrow.Schema, bufferSize int64) (*PackedReader, error) {
+	log.Warn("CQX new packed reader", zap.Any("filePaths", filePaths), zap.Any("schema", schema))
 	cFilePaths := make([]*C.char, len(filePaths))
 	for i, path := range filePaths {
 		cFilePaths[i] = C.CString(path)
@@ -60,6 +64,7 @@ func NewPackedReader(filePaths []string, schema *arrow.Schema, bufferSize int64)
 func (pr *PackedReader) ReadNext() (arrow.Record, error) {
 	var cArr C.CArrowArray
 	var cSchema C.CArrowSchema
+	log.Warn("CQX read next", zap.Any("pr", pr))
 	status := C.ReadNext(pr.cPackedReader, &cArr, &cSchema)
 	if err := ConsumeCStatusIntoError(&status); err != nil {
 		return nil, err

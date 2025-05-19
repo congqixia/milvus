@@ -29,6 +29,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/suite"
+	"go.uber.org/zap"
 	"google.golang.org/grpc"
 
 	"github.com/milvus-io/milvus-proto/go-api/v2/commonpb"
@@ -38,6 +39,7 @@ import (
 	"github.com/milvus-io/milvus/internal/storagecommon"
 	"github.com/milvus-io/milvus/internal/util/initcore"
 	"github.com/milvus-io/milvus/pkg/v2/common"
+	"github.com/milvus-io/milvus/pkg/v2/log"
 	"github.com/milvus-io/milvus/pkg/v2/proto/datapb"
 	"github.com/milvus-io/milvus/pkg/v2/proto/rootcoordpb"
 	"github.com/milvus-io/milvus/pkg/v2/util/merr"
@@ -131,6 +133,8 @@ func (s *PackedBinlogRecordSuite) TestPackedBinlogRecordIntegration() {
 		WithBufferSize(1 * 1024 * 1024), // 1MB
 		WithColumnGroups(columnGroups),
 	}
+
+	log.Warn("CQX", zap.String("mode", paramtable.Get().CommonCfg.StorageType.GetValue()))
 
 	w, err := NewBinlogRecordWriter(s.ctx, s.collectionID, s.partitionID, s.segmentID, s.schema, s.logIDAlloc, s.chunkSize, s.bucketName, s.rootPath, s.maxRowNum, wOption...)
 	s.NoError(err)

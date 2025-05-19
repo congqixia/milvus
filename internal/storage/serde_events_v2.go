@@ -25,6 +25,7 @@ import (
 	"github.com/apache/arrow/go/v17/arrow/array"
 	"github.com/cockroachdb/errors"
 	"github.com/samber/lo"
+	"go.uber.org/zap"
 
 	"github.com/milvus-io/milvus-proto/go-api/v2/schemapb"
 	"github.com/milvus-io/milvus/internal/allocator"
@@ -68,6 +69,7 @@ func (pr *packedRecordReader) iterateNextBatch() error {
 	if err != nil {
 		return merr.WrapErrParameterInvalid("New binlog record packed reader error: %s", err.Error())
 	}
+	log.Warn("CQX new packed reader", zap.Any("reader", reader))
 	pr.reader = reader
 	return nil
 }

@@ -24,11 +24,13 @@ import (
 	"sort"
 
 	"github.com/samber/lo"
+	"go.uber.org/zap"
 
 	"github.com/milvus-io/milvus-proto/go-api/v2/schemapb"
 	"github.com/milvus-io/milvus/internal/allocator"
 	"github.com/milvus-io/milvus/internal/storagecommon"
 	"github.com/milvus-io/milvus/internal/storagev2/packed"
+	"github.com/milvus-io/milvus/pkg/v2/log"
 	"github.com/milvus-io/milvus/pkg/v2/proto/datapb"
 	"github.com/milvus-io/milvus/pkg/v2/util/merr"
 	"github.com/milvus-io/milvus/pkg/v2/util/paramtable"
@@ -188,6 +190,7 @@ func NewBinlogRecordReader(ctx context.Context, binlogs []*datapb.FieldBinlog, s
 	for _, opt := range option {
 		opt(rwOptions)
 	}
+	log.Warn("CQX", zap.Any("binlogs", binlogs), zap.Int64("version", rwOptions.version))
 	switch rwOptions.version {
 	case StorageV1:
 		blobsReader, err := makeBlobsReader(ctx, binlogs, rwOptions.downloader)
@@ -209,9 +212,11 @@ func NewBinlogRecordReader(ctx context.Context, binlogs []*datapb.FieldBinlog, s
 				if paramtable.Get().CommonCfg.StorageType.GetValue() != "local" {
 					path.Join(rwOptions.bucketName, logPath)
 				}
+				log.Warn("CQX", zap.String("logPath", logPath), zap.Int64("version", rwOptions.version))
 				paths[j] = append(paths[j], logPath)
 			}
 		}
+		log.Warn("CQX true paths for packed recorded reader", zap.Any("paths", paths))
 		return newPackedRecordReader(paths, schema, rwOptions.bufferSize)
 	}
 	return nil, merr.WrapErrServiceInternal(fmt.Sprintf("unsupported storage version %d", rwOptions.version))
