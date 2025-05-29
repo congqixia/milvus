@@ -183,3 +183,5 @@ replace (
 )
 
 exclude github.com/apache/pulsar-client-go/oauth2 v0.0.0-20211108044248-fe3b7c4e445b
+
+replace github.com/form3tech-oss/jwt-go => github.com/congqixia/jwt v1.0.3-0.20250529085224-885267efb5bc
