@@ -86,8 +86,6 @@ func (f *DefaultFactory) initMQ(standalone bool, params *paramtable.ComponentPar
 	log.Info("try to init mq", zap.Bool("standalone", standalone), zap.String("mqType", mqType))
 
 	switch mqType {
-	case mqTypeNatsmq:
-		f.msgStreamFactory = msgstream.NewNatsmqFactory()
 	case mqTypeRocksmq:
 		f.msgStreamFactory = msgstream.NewRocksmqFactory(params.RocksmqCfg.Path.GetValue(), &params.ServiceParam)
 	case mqTypePulsar:
