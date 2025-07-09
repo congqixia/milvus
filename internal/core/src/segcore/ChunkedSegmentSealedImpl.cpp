@@ -360,11 +360,7 @@ ChunkedSegmentSealedImpl::load_field_data_internal(
         auto field_data_info = FieldDataInfo(field_id.get(),
                                              num_rows,
                                              load_info.mmap_dir_path,
-<<<<<<< HEAD
                                              schema_->ShouldLoadField(field_id));
-=======
-                                             schema_->ShallLoadFile(field_id));
->>>>>>> 3649a90e7a (enhance: [AddField] Add log for segcore segment schema change)
         LOG_INFO("segment {} loads field {} with num_rows {}, sorted by pk {}",
                  this->get_segment_id(),
                  field_id.get(),
