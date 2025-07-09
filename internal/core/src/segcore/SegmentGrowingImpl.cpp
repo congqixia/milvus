@@ -1258,6 +1258,9 @@ SegmentGrowingImpl::LazyCheckSchema(SchemaPtr sch) {
             schema_->get_schema_version(),
             sch->get_schema_version());
         Reopen(sch);
+        LOG_INFO("reopen segment {} with new schema version {} done",
+                 id_,
+                 sch->get_schema_version());
     }
 }
 
