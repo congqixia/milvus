@@ -90,6 +90,10 @@ SegmentGrowingImpl::Insert(int64_t reserved_offset,
                            InsertRecordProto* insert_record_proto) {
     AssertInfo(insert_record_proto->num_rows() == num_rows,
                "Entities_raw count not equal to insert size");
+    
+    // protect schema being changed during insert
+    std::shared_lock lck(mutex_);
+
     // step 1: check insert data if valid
     std::unordered_map<FieldId, int64_t> field_id_to_offset;
     int64_t field_offset = 0;
