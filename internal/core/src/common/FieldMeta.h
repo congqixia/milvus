@@ -148,9 +148,8 @@ class FieldMeta {
         Assert(IsVectorDataType(type_));
         // should not attempt to get dim() of a sparse vector from schema.
         Assert(!IsSparseFloatVectorDataType(type_));
-        // Assert(vector_info_.has_value());
         AssertInfo(vector_info_.has_value(),
-                   "vector_info_ is not set for field {}, id {}" + name_.get(), id_.get());
+                   "vector_info_ is not set for id {}" , get_id().get());
         return vector_info_->dim_;
     }
 
