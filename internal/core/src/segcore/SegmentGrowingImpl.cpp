@@ -1275,7 +1275,7 @@ SegmentGrowingImpl::Reopen(SchemaPtr sch) {
     for (const auto& field_meta : *absent_fields) {
         fill_empty_field(field_meta);
     }
-
+    LOG_WARN("CQX updating schema, old {:p}, new {:p}", static_cast<void*>(schema_.get()), static_cast<void*>(sch.get()));
     schema_ = sch;
 }
 

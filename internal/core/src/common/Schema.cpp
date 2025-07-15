@@ -33,6 +33,10 @@ namespace milvus {
 
 using std::string;
 
+Schema::~Schema() {
+    LOG_WARN("CQX schema destroyed, {:p}", static_cast<void*>(this));
+}
+
 std::shared_ptr<Schema>
 Schema::ParseFrom(const milvus::proto::schema::CollectionSchema& schema_proto) {
     auto schema = std::make_shared<Schema>();
@@ -74,6 +78,8 @@ Schema::ParseFrom(const milvus::proto::schema::CollectionSchema& schema_proto) {
 
     AssertInfo(schema->get_primary_field_id().has_value(),
                "primary key should be specified");
+
+    LOG_WARN("CQX schema parsed {:p}", static_cast<void*>(&schema));
 
     return schema;
 }

@@ -335,6 +335,8 @@ class Schema {
     std::unique_ptr<std::vector<FieldMeta>>
     AbsentFields(Schema& old_schema) const;
 
+    ~Schema();
+
  private:
     int64_t debug_id = START_USER_FIELDID;
     std::vector<FieldId> field_ids_;
