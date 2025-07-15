@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/suite"
 
@@ -30,6 +31,7 @@ import (
 	"github.com/milvus-io/milvus/pkg/v2/proto/datapb"
 	"github.com/milvus-io/milvus/pkg/v2/proto/querypb"
 	"github.com/milvus-io/milvus/pkg/v2/util/paramtable"
+	"github.com/milvus-io/milvus/pkg/v2/util/tsoutil"
 )
 
 type SearchSuite struct {
@@ -153,6 +155,13 @@ func (suite *SearchSuite) TestSearchSealed() {
 }
 
 func (suite *SearchSuite) TestSearchGrowing() {
+	suite.manager.Collection.UpdateSchema(
+		suite.collectionID,
+		suite.collection.Schema(),
+		// time.Now
+		tsoutil.ComposeTSByTime(time.Now(), 0),
+	)
+
 	searchReq, err := mock_segcore.GenSearchPlanAndRequests(suite.collection.GetCCollection(), []int64{suite.growing.ID()}, mock_segcore.IndexFaissIDMap, 1)
 	suite.NoError(err)
 

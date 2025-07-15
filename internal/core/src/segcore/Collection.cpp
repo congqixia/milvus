@@ -13,6 +13,7 @@
 
 #include <memory>
 
+#include "common/Types.h"
 #include "pb/schema.pb.h"
 #include "segcore/Collection.h"
 #include "log/Log.h"
@@ -84,8 +85,27 @@ Collection::parse_schema(const void* schema_proto_blob,
     schema_ = Schema::ParseFrom(collection_schema);
     schema_->set_schema_version(version);
 
+    for (auto& [field_id, field_meta]: schema_->get_fields()) {
+        LOG_INFO("field: {}, data type {}", field_id.get(), field_meta.get_data_type());
+        
+        if (IsVectorDataType(field_meta.get_data_type()) && field_meta.get_data_type() != DataType::VECTOR_SPARSE_FLOAT) {            
+            LOG_INFO("field dim {}", field_meta.get_dim());
+        }
+    }
+
     if (old_schema) {
         schema_->UpdateLoadFields(old_schema->load_fields());
+    }
+}
+
+void
+Collection::print_schema() {
+    for (auto& [field_id, field_meta]: schema_->get_fields()) {
+        LOG_INFO("field: {}, data type {}", field_id.get(), field_meta.get_data_type());
+        
+        if (IsVectorDataType(field_meta.get_data_type()) && field_meta.get_data_type() != DataType::VECTOR_SPARSE_FLOAT) {            
+            LOG_INFO("field dim {}", field_meta.get_dim());
+        }
     }
 }
 

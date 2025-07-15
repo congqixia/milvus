@@ -47,6 +47,9 @@ DeleteCollection(CCollection collection);
 const char*
 GetCollectionName(CCollection collection);
 
+CStatus 
+PrintCollectionSchema(CCollection collection);
+
 #ifdef __cplusplus
 }
 #endif

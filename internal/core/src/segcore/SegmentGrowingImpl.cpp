@@ -1263,6 +1263,16 @@ SegmentGrowingImpl::LazyCheckSchema(SchemaPtr sch) {
             schema_->get_schema_version(),
             sch->get_schema_version());
         Reopen(sch);
+        LOG_INFO("reopen segment {} with new schema version {} done",
+                 id_,
+                 sch->get_schema_version());
+        for (auto& [field_id, field_meta]: schema_->get_fields()) {
+            LOG_INFO("field: {}, data type {}", field_id.get(), field_meta.get_data_type());
+            
+            if (IsVectorDataType(field_meta.get_data_type()) && field_meta.get_data_type() != DataType::VECTOR_SPARSE_FLOAT) {            
+                LOG_INFO("field dim {}", field_meta.get_dim());
+            }
+        }
     }
 }
 

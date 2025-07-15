@@ -109,6 +109,11 @@ func (c *CCollection) UpdateSchema(sch *schemapb.CollectionSchema, version uint6
 	return ConsumeCStatusIntoError(&status)
 }
 
+func (c *CCollection) PrintSchema() error {
+	status := C.PrintCollectionSchema(c.ptr)
+	return ConsumeCStatusIntoError(&status)
+}
+
 // Release releases the underlying collection
 func (c *CCollection) Release() {
 	C.DeleteCollection(c.ptr)

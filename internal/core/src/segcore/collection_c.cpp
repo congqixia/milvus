@@ -84,6 +84,17 @@ SetIndexMeta(CCollection collection,
     }
 }
 
+CStatus 
+PrintCollectionSchema(CCollection collection) {
+    try {
+        auto col = static_cast<milvus::segcore::Collection*>(collection);
+        col->print_schema();
+        return milvus::SuccessCStatus();
+    } catch (std::exception& e) {
+        return milvus::FailureCStatus(&e);
+    }
+}
+
 void
 DeleteCollection(CCollection collection) {
     SCOPE_CGO_CALL_METRIC();

@@ -32,6 +32,9 @@ class Collection {
     parse_schema(const void* schema_proto_blob,
                  const int64_t length,
                  const uint64_t version);
+    
+    void
+    print_schema();
 
  public:
     SchemaPtr
@@ -53,6 +56,8 @@ class Collection {
     get_collection_name() {
         return collection_name_;
     }
+
+
 
  private:
     std::string collection_name_;

@@ -79,7 +79,7 @@ Schema::ParseFrom(const milvus::proto::schema::CollectionSchema& schema_proto) {
     AssertInfo(schema->get_primary_field_id().has_value(),
                "primary key should be specified");
 
-    LOG_WARN("CQX schema parsed {:p}", static_cast<void*>(&schema));
+    LOG_WARN("CQX schema parsed {:p}", static_cast<void*>(schema.get()));
 
     return schema;
 }
