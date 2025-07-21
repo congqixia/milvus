@@ -95,6 +95,8 @@ SegmentGrowingImpl::Insert(int64_t reserved_offset,
     // otherwise, there might be some data not following new schema
     std::shared_lock lck(sch_mutex_);
 
+    LOG_INFO("CQX insert using schema {:p}", static_cast<void*>(schema_.get()));
+
     // step 1: check insert data if valid
     std::unordered_map<FieldId, int64_t> field_id_to_offset;
     int64_t field_offset = 0;
@@ -1280,13 +1282,15 @@ void
 SegmentGrowingImpl::Reopen(SchemaPtr sch) {
     std::unique_lock lck(sch_mutex_);
 
-    auto absent_fields = sch->AbsentFields(*schema_);
-
-    for (const auto& field_meta : *absent_fields) {
-        fill_empty_field(field_meta);
+    if (sch->get_schema_version() > schema_->get_schema_version()){
+        auto absent_fields = sch->AbsentFields(*schema_);
+    
+        for (const auto& field_meta : *absent_fields) {
+            fill_empty_field(field_meta);
+        }
+        LOG_WARN("CQX updating schema, old {:p}, new {:p}", static_cast<void*>(schema_.get()), static_cast<void*>(sch.get()));
+        schema_ = sch;
     }
-    LOG_WARN("CQX updating schema, old {:p}, new {:p}", static_cast<void*>(schema_.get()), static_cast<void*>(sch.get()));
-    schema_ = sch;
 }
 
 void
