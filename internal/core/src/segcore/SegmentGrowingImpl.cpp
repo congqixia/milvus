@@ -95,7 +95,7 @@ SegmentGrowingImpl::Insert(int64_t reserved_offset,
     // otherwise, there might be some data not following new schema
     std::shared_lock lck(sch_mutex_);
 
-    LOG_INFO("CQX insert using schema {:p}", static_cast<void*>(schema_.get()));
+    LOG_INFO("CQX segment {} insert using schema {:p}", id_, static_cast<void*>(schema_.get()));
 
     // step 1: check insert data if valid
     std::unordered_map<FieldId, int64_t> field_id_to_offset;

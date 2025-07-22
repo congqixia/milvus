@@ -325,7 +325,7 @@ SegmentInternalInterface::get_field_avg_size(FieldId field_id) const {
         ThrowInfo(FieldIDInvalid, "unsupported system field id");
     }
 
-    auto schema = get_schema();
+    auto& schema = get_schema();
     auto& field_meta = schema[field_id];
     auto data_type = field_meta.get_data_type();
 
@@ -338,7 +338,12 @@ SegmentInternalInterface::get_field_avg_size(FieldId field_id) const {
 
         return variable_fields_avg_size_.at(field_id).second;
     } else {
-        return field_meta.get_sizeof();
+        try {
+            return field_meta.get_sizeof();
+        } catch (std::exception& e) {
+            LOG_WARN("CQX get sizeof exception, field id: {}, schema: {:p}", field_id, static_cast<void*>(&schema));
+            throw(e);
+        }
     }
 }
 
@@ -348,7 +353,7 @@ SegmentInternalInterface::set_field_avg_size(FieldId field_id,
                                              int64_t field_size) {
     AssertInfo(field_id.get() >= 0,
                "invalid field id, should be greater than or equal to 0");
-    auto schema = get_schema();
+    auto& schema = get_schema();
     auto& field_meta = schema[field_id];
     auto data_type = field_meta.get_data_type();
 
