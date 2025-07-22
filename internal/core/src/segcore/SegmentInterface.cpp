@@ -341,7 +341,7 @@ SegmentInternalInterface::get_field_avg_size(FieldId field_id) const {
         try {
             return field_meta.get_sizeof();
         } catch (std::exception& e) {
-            LOG_WARN("CQX get sizeof exception, field id: {}, schema: {:p}", field_id, static_cast<void*>(&schema));
+            LOG_WARN("CQX get sizeof exception, field id: {}, schema: {:p}", field_id.get(), static_cast<void*>(const_cast<Schema*>(&schema)));
             throw(e);
         }
     }
