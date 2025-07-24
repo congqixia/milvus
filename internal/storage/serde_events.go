@@ -240,7 +240,7 @@ func newCompositeBinlogRecordReader(schema *schemapb.CollectionSchema, blobsRead
 	}, nil
 }
 
-func ValueDeserializer(r Record, v []*Value, fieldSchema []*schemapb.FieldSchema) error {
+func ValueDeserializer(r Record, v []*Value, fieldSchema []*schemapb.FieldSchema, transform func(v any) any) error {
 	pkField := func() *schemapb.FieldSchema {
 		for _, field := range fieldSchema {
 			if field.GetIsPrimaryKey() {
@@ -274,6 +274,9 @@ func ValueDeserializer(r Record, v []*Value, fieldSchema []*schemapb.FieldSchema
 			} else {
 				d, ok := serdeMap[dt].deserialize(r.Column(j), i)
 				if ok {
+					if transform != nil {
+						d = transform(d)
+					}
 					m[j] = d // TODO: avoid memory copy here.
 				} else {
 					return merr.WrapErrServiceInternal(fmt.Sprintf("unexpected type %s", dt))
@@ -300,6 +303,15 @@ func ValueDeserializer(r Record, v []*Value, fieldSchema []*schemapb.FieldSchema
 	return nil
 }
 
+func CopyIfBytes(v any) any {
+	switch val := v.(type) {
+	case []byte:
+		return bytes.Clone(val)
+	default:
+		return v
+	}
+}
+
 func NewBinlogDeserializeReader(schema *schemapb.CollectionSchema, blobsReader ChunkedBlobsReader) (*DeserializeReaderImpl[*Value], error) {
 	reader, err := newCompositeBinlogRecordReader(schema, blobsReader)
 	if err != nil {
@@ -307,7 +319,7 @@ func NewBinlogDeserializeReader(schema *schemapb.CollectionSchema, blobsReader C
 	}
 
 	return NewDeserializeReader(reader, func(r Record, v []*Value) error {
-		return ValueDeserializer(r, v, schema.Fields)
+		return ValueDeserializer(r, v, schema.Fields, nil)
 	}), nil
 }
 

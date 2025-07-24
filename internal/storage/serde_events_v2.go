@@ -135,7 +135,7 @@ func NewPackedDeserializeReader(paths [][]string, schema *schemapb.CollectionSch
 	}
 
 	return NewDeserializeReader(reader, func(r Record, v []*Value) error {
-		return ValueDeserializer(r, v, schema.Fields)
+		return ValueDeserializer(r, v, schema.Fields, nil)
 	}), nil
 }
 
