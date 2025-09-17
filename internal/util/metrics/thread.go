@@ -17,7 +17,10 @@
 package metrics
 
 import (
+	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -55,7 +58,7 @@ func (thw *threadWatcher) Start() {
 }
 
 func (thw *threadWatcher) watchThreadNum() {
-	ticker := time.NewTicker(time.Second * 30)
+	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	pid := os.Getpid()
 	p, err := process.NewProcess(int32(pid))
@@ -63,6 +66,8 @@ func (thw *threadWatcher) watchThreadNum() {
 		log.Warn("thread watcher failed to get milvus process info, quit", zap.Int("pid", pid), zap.Error(err))
 		return
 	}
+	var counter uint64
+	var cooldown bool
 	for {
 		select {
 		case <-ticker.C:
@@ -71,8 +76,34 @@ func (thw *threadWatcher) watchThreadNum() {
 				log.Warn("thread watcher failed to get process", zap.Int("pid", pid), zap.Error(err))
 				continue
 			}
-			log.Debug("thread watcher observe thread num", zap.Int32("threadNum", threadNum))
-			metrics.ThreadNum.Set(float64(threadNum))
+			if threadNum > 400 && !cooldown {
+				taskDir := fmt.Sprintf("/proc/%d/task", pid)
+				tidDirs, err := filepath.Glob(taskDir + "/*")
+				if err == nil {
+					names := make([]string, 0, len(tidDirs))
+					for _, tidPath := range tidDirs {
+						tid := filepath.Base(tidPath)
+
+						commPath := fmt.Sprintf("%s/comm", tidPath)
+						commContent, err := os.ReadFile(commPath)
+						if err != nil {
+							fmt.Printf("Error reading comm file for TID %s: %v\n", tid, err)
+							continue
+						}
+						threadName := strings.TrimSpace(string(commContent))
+						names = append(names, threadName)
+					}
+					log.Warn("large threads found", zap.Int32("num", threadNum), zap.Strings("threadNames", names))
+				}
+				cooldown = true
+			}
+			if counter%10 == 0 {
+				cooldown = false
+				log.Debug("thread watcher observe thread num", zap.Int32("threadNum", threadNum))
+				metrics.ThreadNum.Set(float64(threadNum))
+			}
+			counter++
+
 		case <-thw.ch:
 			log.Info("thread watcher exit")
 			return
