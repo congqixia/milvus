@@ -17,6 +17,7 @@
 #include <vector>
 #include <boost/geometry.hpp>
 #include <boost/geometry/index/rtree.hpp>
+#include <boost/serialization/shared_ptr.hpp>
 #include "ogr_geometry.h"
 #include "pb/plan.pb.h"
 
@@ -119,8 +120,23 @@ class RTreeIndexWrapper {
     // Boost.Geometry types and in-memory structures
     using Point = bg::model::point<double, 2, bg::cs::cartesian>;
     using Box = bg::model::box<Point>;
-    using Value = std::pair<Box, int64_t>;  // (MBR, row_offset)
-    using RTree = bgi::rtree<Value, bgi::rstar<16>>;
+    using Value = std::pair<std::shared_ptr<Box>, int64_t>;  // (MBR, row_offset)
+    // struct ValuePtr {
+    //     ValuePtr(std::shared_ptr<Box> b, int64_t o) : box(std::move(b)), row_offset(o) {}
+    //     std::shared_ptr<Box> box;
+    //     int64_t row_offset;
+    // };
+    struct indexable {
+        typedef Box const& result_type;
+        result_type operator()(Value const& v) const { return *v.first; }
+    };
+    // struct equal_to {
+    //     typedef bool result_type;
+    //     bool operator()(ValuePtr l, ValuePtr r) const {
+    //         return bg::equals(l.box, r.box);
+    //     }
+    // };
+    using RTree = bgi::rtree<Value, bgi::rstar<16>, indexable>;
 
     RTree rtree_{};
     std::vector<Value> values_;

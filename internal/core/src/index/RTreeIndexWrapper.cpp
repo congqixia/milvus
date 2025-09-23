@@ -63,7 +63,7 @@ RTreeIndexWrapper::add_geometry(const uint8_t* wkb_data,
 
     // Create Boost box and insert
     Box box(Point(minX, minY), Point(maxX, maxY));
-    Value val(box, row_offset);
+    Value val(std::make_shared<Box>(box), row_offset);
     values_.push_back(val);
     rtree_.insert(val);
 
@@ -110,7 +110,7 @@ RTreeIndexWrapper::bulk_load_from_field_data(
             geom->getEnvelope(&env);
             OGRGeometryFactory::destroyGeometry(geom);
             Box box(Point(env.MinX, env.MinY), Point(env.MaxX, env.MaxY));
-            local_values.emplace_back(box, absolute_offset);
+            local_values.emplace_back(std::make_shared<Box>(box), absolute_offset);
         }
     }
     values_.swap(local_values);
