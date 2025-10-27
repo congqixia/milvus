@@ -121,7 +121,7 @@ class ScalarIndexSort : public ScalarIndex<T> {
 
     const bool
     HasRawData() const override {
-        return true;
+        return false;
     }
 
     void
