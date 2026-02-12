@@ -278,3 +278,27 @@ func NewCreateIndexMessageBody(msg message.ImmutableMessage) (msgstream.TsMsg, e
 		CreateIndexMessage: createIndexMsg,
 	}, nil
 }
+
+type BatchUpdateManifestMessageBody struct {
+	*tsMsgImpl
+	BatchUpdateManifestMessage message.ImmutableBatchUpdateManifestMessageV2
+}
+
+func NewBatchUpdateManifestMessageBody(msg message.ImmutableMessage) (msgstream.TsMsg, error) {
+	batchUpdateMsg, err := message.AsImmutableBatchUpdateManifestMessageV2(msg)
+	if err != nil {
+		return nil, err
+	}
+	return &BatchUpdateManifestMessageBody{
+		tsMsgImpl: &tsMsgImpl{
+			BaseMsg: msgstream.BaseMsg{
+				BeginTimestamp: msg.TimeTick(),
+				EndTimestamp:   msg.TimeTick(),
+			},
+			ts:      msg.TimeTick(),
+			sz:      msg.EstimateSize(),
+			msgType: MustGetCommonpbMsgTypeFromMessageType(msg.MessageType()),
+		},
+		BatchUpdateManifestMessage: batchUpdateMsg,
+	}, nil
+}

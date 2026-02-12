@@ -2724,17 +2724,17 @@ ChunkedSegmentSealedImpl::load_field_data_common(
     milvus::OpContext* op_ctx) {
     {
         std::unique_lock lck(mutex_);
-        AssertInfo(SystemProperty::Instance().IsSystem(field_id) ||
-                       !get_bit(field_data_ready_bitset_, field_id),
-                   "non system field {} data already loaded",
-                   field_id.get());
-        bool already_exists = false;
-        fields_.withRLock([&](auto& fields) {
-            already_exists = fields.find(field_id) != fields.end();
-        });
-        AssertInfo(
-            !already_exists, "field {} column already exists", field_id.get());
-        fields_.wlock()->emplace(field_id, column);
+        // AssertInfo(SystemProperty::Instance().IsSystem(field_id) ||
+        //                !get_bit(field_data_ready_bitset_, field_id),
+        //            "non system field {} data already loaded",
+        //            field_id.get());
+        // bool already_exists = false;
+        // fields_.withRLock([&](auto& fields) {
+        //     already_exists = fields.find(field_id) != fields.end();
+        // });
+        // AssertInfo(
+            // !already_exists, "field {} column already exists", field_id.get());
+        fields_.wlock()->insert_or_assign(field_id, column);
         if (enable_mmap) {
             mmap_field_ids_.insert(field_id);
         }
@@ -2786,9 +2786,9 @@ ChunkedSegmentSealedImpl::load_field_data_common(
 
     {
         std::unique_lock lck(mutex_);
-        AssertInfo(!get_bit(field_data_ready_bitset_, field_id),
-                   "field {} data already loaded",
-                   field_id.get());
+        // AssertInfo(!get_bit(field_data_ready_bitset_, field_id),
+        //            "field {} data already loaded",
+        //            field_id.get());
         set_bit(field_data_ready_bitset_, field_id, true);
         update_row_count(num_rows);
         if (generated_interim_index) {

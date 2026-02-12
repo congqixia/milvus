@@ -148,6 +148,8 @@ func fromMessageToTsMsgV2(msg message.ImmutableMessage) (msgstream.TsMsg, error)
 		tsMsg, err = NewAlterWALMessageBody(msg)
 	case message.MessageTypeCreateIndex:
 		tsMsg, err = NewCreateIndexMessageBody(msg)
+	case message.MessageTypeBatchUpdateManifest:
+		tsMsg, err = NewBatchUpdateManifestMessageBody(msg)
 	default:
 		panic("unsupported message type")
 	}

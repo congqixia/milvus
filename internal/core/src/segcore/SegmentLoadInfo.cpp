@@ -497,6 +497,10 @@ SegmentLoadInfo::ComputeDiff(SegmentLoadInfo& new_info) {
     if (HasManifestPath()) {
         AssertInfo(new_info.HasManifestPath(),
                    "manifest could only be updated with other manifest");
+        if (GetManifestPath() != new_info.GetManifestPath()) {
+            diff.manifest_updated = true;
+            diff.new_manifest_path = new_info.GetManifestPath();
+        }
         ComputeDiffColumnGroups(diff, new_info);
     } else {
         AssertInfo(
