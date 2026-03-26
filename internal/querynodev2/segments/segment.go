@@ -1106,7 +1106,7 @@ func (s *LocalSegment) innerLoadIndex(ctx context.Context,
 	return err
 }
 
-func (s *LocalSegment) LoadJSONKeyIndex(ctx context.Context, jsonKeyStats *datapb.JsonKeyStats, schemaHelper *typeutil.SchemaHelper) error {
+func (s *LocalSegment) LoadJSONKeyIndex(ctx context.Context, jsonKeyStats *datapb.JsonKeyStats, schemaHelper *typeutil.SchemaHelper, basePath string) error {
 	if !s.ptrLock.PinIf(state.IsNotReleased) {
 		return merr.WrapErrSegmentNotLoaded(s.ID(), "segment released")
 	}
@@ -1151,6 +1151,7 @@ func (s *LocalSegment) LoadJSONKeyIndex(ctx context.Context, jsonKeyStats *datap
 		MmapDirPath:  paramtable.Get().QueryNodeCfg.MmapDirPath.GetValue(),
 		StatsSize:    jsonKeyStats.GetLogSize(),
 		WarmupPolicy: warmupPolicy,
+		BasePath:     basePath,
 	}
 
 	marshaled, err := proto.Marshal(cgoProto)
