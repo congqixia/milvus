@@ -388,6 +388,157 @@ LoadCellBatchAsync(milvus::OpContext* op_ctx,
     return futures;
 }
 
+std::vector<std::future<void>>
+LoadAndProcessCellBatchAsync(milvus::OpContext* op_ctx,
+                             std::vector<CellSpec> cell_specs,
+                             BatchReaderFactory reader_factory,
+                             CellProcessor processor,
+                             std::shared_ptr<CellChunkChannel> channel,
+                             int64_t memory_limit,
+                             milvus::proto::common::LoadPriority priority) {
+    if (cell_specs.empty()) {
+        channel->close();
+        return {};
+    }
+
+    // Sort by (file_idx, local_rg_offset) for IO merging
+    std::sort(cell_specs.begin(),
+              cell_specs.end(),
+              [](const CellSpec& a, const CellSpec& b) {
+                  if (a.file_idx != b.file_idx) {
+                      return a.file_idx < b.file_idx;
+                  }
+                  return a.local_rg_offset < b.local_rg_offset;
+              });
+
+    for (const auto& spec : cell_specs) {
+        AssertInfo(spec.memory_size > 0,
+                   "[StorageV2] CellSpec cid={} has memory_size={}, "
+                   "callers must provide actual memory size",
+                   spec.cid,
+                   spec.memory_size);
+    }
+
+    // Group consecutive, same-key cells into batches for IO merging
+    struct CellBatch {
+        size_t file_idx;
+        int64_t rg_offset;
+        int64_t rg_count;
+        int64_t batch_memory = 0;
+        std::vector<CellSpec> cells;
+    };
+
+    std::vector<CellBatch> batches;
+    CellBatch current{};
+
+    for (const auto& spec : cell_specs) {
+        bool should_split = false;
+        if (!current.cells.empty()) {
+            bool batch_full =
+                (current.batch_memory + spec.memory_size > memory_limit);
+            if (spec.file_idx != current.file_idx ||
+                spec.local_rg_offset != current.rg_offset + current.rg_count ||
+                batch_full) {
+                should_split = true;
+            }
+        }
+        if (should_split) {
+            batches.push_back(std::move(current));
+            current = {};
+        }
+        if (current.cells.empty()) {
+            current.file_idx = spec.file_idx;
+            current.rg_offset = spec.local_rg_offset;
+            current.rg_count = 0;
+            current.batch_memory = 0;
+        }
+        current.rg_count += spec.rg_count;
+        current.batch_memory += spec.memory_size;
+        current.cells.push_back(spec);
+    }
+    if (!current.cells.empty()) {
+        batches.push_back(std::move(current));
+    }
+
+    LOG_INFO(
+        "[StorageV2] LoadAndProcessCellBatchAsync: {} cells -> {} batches "
+        "(memory_limit={}MB)",
+        cell_specs.size(),
+        batches.size(),
+        memory_limit >> 20);
+
+    if (batches.empty()) {
+        channel->close();
+        return {};
+    }
+
+    auto& pool = ThreadPools::GetThreadPool(milvus::PriorityForLoad(priority));
+    auto remaining = std::make_shared<std::atomic<size_t>>(batches.size());
+    auto reader_memory_limit =
+        std::max<int64_t>(memory_limit / static_cast<int64_t>(batches.size()),
+                          FILE_SLICE_SIZE.load());
+    auto shared_factory =
+        std::make_shared<BatchReaderFactory>(std::move(reader_factory));
+    auto shared_processor =
+        std::make_shared<CellProcessor>(std::move(processor));
+
+    std::vector<std::future<void>> futures;
+    futures.reserve(batches.size());
+
+    for (auto& batch : batches) {
+        futures.emplace_back(pool.Submit([batch = std::move(batch),
+                                          shared_factory,
+                                          shared_processor,
+                                          reader_memory_limit,
+                                          channel,
+                                          remaining,
+                                          op_ctx]() {
+            auto task_guard = folly::makeGuard([&channel, &remaining]() {
+                if (remaining->fetch_sub(1) == 1) {
+                    channel->close();
+                }
+            });
+            CheckCancellation(op_ctx, -1, "LoadAndProcessCellBatchAsync");
+
+            auto tables_result = (*shared_factory)(batch.file_idx,
+                                                   batch.rg_offset,
+                                                   batch.rg_count,
+                                                   reader_memory_limit);
+            AssertInfo(tables_result.ok(),
+                       "[StorageV2] Failed to read batch: " +
+                           tables_result.status().ToString());
+            auto all_tables = std::move(tables_result).ValueOrDie();
+            AssertInfo(all_tables.size() == static_cast<size_t>(batch.rg_count),
+                       "reader returns less tables than expected, batch rg "
+                       "count: {}, result size: {}",
+                       batch.rg_count,
+                       all_tables.size());
+
+            int64_t table_offset = 0;
+            for (const auto& cell : batch.cells) {
+                // Extract this cell's tables
+                std::vector<std::shared_ptr<arrow::Table>> cell_tables;
+                cell_tables.reserve(cell.rg_count);
+                for (int64_t i = 0; i < cell.rg_count; ++i) {
+                    cell_tables.push_back(
+                        std::move(all_tables[table_offset + i]));
+                }
+                table_offset += cell.rg_count;
+
+                // Process (e.g. write mmap file) inside pool thread
+                auto chunk = (*shared_processor)(cell_tables, cell.cid);
+
+                auto result = std::make_shared<CellChunkResult>();
+                result->cid = cell.cid;
+                result->chunk = std::move(chunk);
+                channel->push(std::move(result));
+            }
+        }));
+    }
+
+    return futures;
+}
+
 BatchReaderFactory
 MakeFileReaderFactory(std::vector<std::string> remote_files,
                       milvus_storage::ArrowFileSystemPtr fs) {

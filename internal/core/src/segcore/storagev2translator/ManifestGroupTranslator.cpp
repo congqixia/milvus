@@ -223,22 +223,31 @@ ManifestGroupTranslator::get_cells(
                               meta_.chunk_memory_size_[cid]});
     }
 
+    // Wrap load_group_chunk as a processor to run inside pool threads,
+    // eliminating the serial consumer bottleneck for mmap disk writes.
+    milvus::segcore::CellProcessor processor =
+        [this](const std::vector<std::shared_ptr<arrow::Table>>& tables,
+               milvus::cachinglayer::cid_t cid) {
+            return load_group_chunk(tables, cid);
+        };
+
     // Create factory using ChunkReader — reads a batch of row groups at once
     auto factory = milvus::segcore::MakeChunkReaderFactory(chunk_reader_);
 
-    // Submit cell-batch loading tasks
+    // Submit fused cell-batch loading + processing tasks
     auto& pool = milvus::ThreadPools::GetThreadPool(
         milvus::PriorityForLoad(load_priority_));
-    auto channel = std::make_shared<milvus::segcore::CellReaderChannel>(
+    auto channel = std::make_shared<milvus::segcore::CellChunkChannel>(
         static_cast<size_t>(pool.GetMaxThreadNum() * 1.5));
 
-    auto load_futures =
-        milvus::segcore::LoadCellBatchAsync(ctx,
-                                            std::move(cell_specs),
-                                            std::move(factory),
-                                            channel,
-                                            DEFAULT_FIELD_MAX_MEMORY_LIMIT,
-                                            load_priority_);
+    auto load_futures = milvus::segcore::LoadAndProcessCellBatchAsync(
+        ctx,
+        std::move(cell_specs),
+        std::move(factory),
+        std::move(processor),
+        channel,
+        DEFAULT_FIELD_MAX_MEMORY_LIMIT,
+        load_priority_);
 
     LOG_INFO(
         "[StorageV2] translator {} submits {} batch tasks for manifest column "
@@ -247,25 +256,24 @@ ManifestGroupTranslator::get_cells(
         load_futures.size(),
         column_group_index_);
 
-    // Pop loop — convert each cell immediately, no ArrowTable accumulation
+    // Pop loop — collect already-processed GroupChunks (lightweight)
     std::unordered_map<milvus::cachinglayer::cid_t,
                        std::unique_ptr<milvus::GroupChunk>>
         completed_cells;
     completed_cells.reserve(cids.size());
 
     try {
-        std::shared_ptr<milvus::segcore::CellLoadResult> cell_data;
-        while (channel->pop(cell_data)) {
+        std::shared_ptr<milvus::segcore::CellChunkResult> result;
+        while (channel->pop(result)) {
             CheckCancellation(
                 ctx, segment_id_, "ManifestGroupTranslator::get_cells()");
-            completed_cells[cell_data->cid] =
-                load_group_chunk(cell_data->tables, cell_data->cid);
+            completed_cells[result->cid] = std::move(result->chunk);
         }
     } catch (...) {
         // Drain the channel to unblock producers that may be stuck on push()
         // to a full bounded channel. Without draining, producers block forever
         // and their task_guard (which calls channel->close()) never executes.
-        std::shared_ptr<milvus::segcore::CellLoadResult> discard;
+        std::shared_ptr<milvus::segcore::CellChunkResult> discard;
         try {
             while (channel->pop(discard)) {
             }

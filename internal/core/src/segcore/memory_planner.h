@@ -28,6 +28,7 @@
 
 #include "common/Channel.h"
 #include "common/FieldData.h"
+#include "common/GroupChunk.h"
 #include "common/OpContext.h"
 #include "milvus-storage/common/metadata.h"
 #include "milvus-storage/filesystem/fs.h"
@@ -155,6 +156,46 @@ LoadCellBatchAsync(milvus::OpContext* op_ctx,
                    int64_t memory_limit,
                    milvus::proto::common::LoadPriority priority =
                        milvus::proto::common::LoadPriority::HIGH);
+
+// ---- Fused producer-consumer cell loading ----
+
+// Result of loading and processing a single cell: cid + the finished GroupChunk.
+struct CellChunkResult {
+    int64_t cid;
+    std::unique_ptr<milvus::GroupChunk> chunk;
+};
+
+using CellChunkChannel = milvus::Channel<std::shared_ptr<CellChunkResult>>;
+
+// Callback that converts Arrow Tables into a GroupChunk inside the pool thread.
+using CellProcessor = std::function<std::unique_ptr<GroupChunk>(
+    const std::vector<std::shared_ptr<arrow::Table>>& tables,
+    cachinglayer::cid_t cid)>;
+
+/**
+ * Load cells in batches and process them (via processor) inside pool threads,
+ * pushing lightweight CellChunkResult to the channel instead of raw Arrow Tables.
+ * This eliminates the serial consumer bottleneck where load_group_chunk() was
+ * called on the main thread, blocking IO pool threads on channel push().
+ *
+ * @param op_ctx operation context for cancellation
+ * @param cell_specs cell specifications (sorted internally)
+ * @param reader_factory factory that reads all row groups for a batch
+ * @param processor callback to convert Arrow Tables → GroupChunk
+ * @param channel channel to receive processed cell chunks; closed when all done
+ * @param memory_limit total memory limit for readers
+ * @param priority load priority
+ * @return vector of futures for the batch loading tasks
+ */
+std::vector<std::future<void>>
+LoadAndProcessCellBatchAsync(milvus::OpContext* op_ctx,
+                             std::vector<CellSpec> cell_specs,
+                             BatchReaderFactory reader_factory,
+                             CellProcessor processor,
+                             std::shared_ptr<CellChunkChannel> channel,
+                             int64_t memory_limit,
+                             milvus::proto::common::LoadPriority priority =
+                                 milvus::proto::common::LoadPriority::HIGH);
 
 /**
  * Creates a BatchReaderFactory that reads from Parquet files via FileRowGroupReader.
