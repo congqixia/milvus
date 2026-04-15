@@ -832,6 +832,19 @@ func Test_NewServer(t *testing.T) {
 		assert.True(t, merr.Ok(resp))
 	})
 
+	t.Run("UpdateSegmentColumnGroups", func(t *testing.T) {
+		req := &datapb.UpdateSegmentColumnGroupsRequest{
+			SegmentId: 42,
+			ColumnGroups: map[int64]*datapb.FieldBinlog{
+				1000: {FieldID: 1000, ChildFields: []int64{101}},
+			},
+		}
+		mockMixCoord.EXPECT().UpdateSegmentColumnGroups(mock.Anything, req).Return(merr.Success(), nil)
+		resp, err := server.UpdateSegmentColumnGroups(ctx, req)
+		assert.NoError(t, err)
+		assert.True(t, merr.Ok(resp))
+	})
+
 	t.Run("RefreshExternalCollection", func(t *testing.T) {
 		req := &datapb.RefreshExternalCollectionRequest{
 			CollectionId:   1001,

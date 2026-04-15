@@ -78,6 +78,7 @@ const (
 	DataCoord_GetRestoreSnapshotState_FullMethodName              = "/milvus.proto.data.DataCoord/GetRestoreSnapshotState"
 	DataCoord_ListRestoreSnapshotJobs_FullMethodName              = "/milvus.proto.data.DataCoord/ListRestoreSnapshotJobs"
 	DataCoord_BatchUpdateManifest_FullMethodName                  = "/milvus.proto.data.DataCoord/BatchUpdateManifest"
+	DataCoord_UpdateSegmentColumnGroups_FullMethodName            = "/milvus.proto.data.DataCoord/UpdateSegmentColumnGroups"
 	DataCoord_RefreshExternalCollection_FullMethodName            = "/milvus.proto.data.DataCoord/RefreshExternalCollection"
 	DataCoord_GetRefreshExternalCollectionProgress_FullMethodName = "/milvus.proto.data.DataCoord/GetRefreshExternalCollectionProgress"
 	DataCoord_ListRefreshExternalCollectionJobs_FullMethodName    = "/milvus.proto.data.DataCoord/ListRefreshExternalCollectionJobs"
@@ -153,6 +154,8 @@ type DataCoordClient interface {
 	ListRestoreSnapshotJobs(ctx context.Context, in *ListRestoreSnapshotJobsRequest, opts ...grpc.CallOption) (*ListRestoreSnapshotJobsResponse, error)
 	// batch update manifest
 	BatchUpdateManifest(ctx context.Context, in *BatchUpdateManifestRequest, opts ...grpc.CallOption) (*commonpb.Status, error)
+	// storage-v2 column group maintenance
+	UpdateSegmentColumnGroups(ctx context.Context, in *UpdateSegmentColumnGroupsRequest, opts ...grpc.CallOption) (*commonpb.Status, error)
 	// External Table Refresh APIs
 	RefreshExternalCollection(ctx context.Context, in *RefreshExternalCollectionRequest, opts ...grpc.CallOption) (*RefreshExternalCollectionResponse, error)
 	GetRefreshExternalCollectionProgress(ctx context.Context, in *GetRefreshExternalCollectionProgressRequest, opts ...grpc.CallOption) (*GetRefreshExternalCollectionProgressResponse, error)
@@ -664,6 +667,15 @@ func (c *dataCoordClient) BatchUpdateManifest(ctx context.Context, in *BatchUpda
 	return out, nil
 }
 
+func (c *dataCoordClient) UpdateSegmentColumnGroups(ctx context.Context, in *UpdateSegmentColumnGroupsRequest, opts ...grpc.CallOption) (*commonpb.Status, error) {
+	out := new(commonpb.Status)
+	err := c.cc.Invoke(ctx, DataCoord_UpdateSegmentColumnGroups_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *dataCoordClient) RefreshExternalCollection(ctx context.Context, in *RefreshExternalCollectionRequest, opts ...grpc.CallOption) (*RefreshExternalCollectionResponse, error) {
 	out := new(RefreshExternalCollectionResponse)
 	err := c.cc.Invoke(ctx, DataCoord_RefreshExternalCollection_FullMethodName, in, out, opts...)
@@ -761,6 +773,8 @@ type DataCoordServer interface {
 	ListRestoreSnapshotJobs(context.Context, *ListRestoreSnapshotJobsRequest) (*ListRestoreSnapshotJobsResponse, error)
 	// batch update manifest
 	BatchUpdateManifest(context.Context, *BatchUpdateManifestRequest) (*commonpb.Status, error)
+	// storage-v2 column group maintenance
+	UpdateSegmentColumnGroups(context.Context, *UpdateSegmentColumnGroupsRequest) (*commonpb.Status, error)
 	// External Table Refresh APIs
 	RefreshExternalCollection(context.Context, *RefreshExternalCollectionRequest) (*RefreshExternalCollectionResponse, error)
 	GetRefreshExternalCollectionProgress(context.Context, *GetRefreshExternalCollectionProgressRequest) (*GetRefreshExternalCollectionProgressResponse, error)
@@ -935,6 +949,9 @@ func (UnimplementedDataCoordServer) ListRestoreSnapshotJobs(context.Context, *Li
 }
 func (UnimplementedDataCoordServer) BatchUpdateManifest(context.Context, *BatchUpdateManifestRequest) (*commonpb.Status, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method BatchUpdateManifest not implemented")
+}
+func (UnimplementedDataCoordServer) UpdateSegmentColumnGroups(context.Context, *UpdateSegmentColumnGroupsRequest) (*commonpb.Status, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateSegmentColumnGroups not implemented")
 }
 func (UnimplementedDataCoordServer) RefreshExternalCollection(context.Context, *RefreshExternalCollectionRequest) (*RefreshExternalCollectionResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RefreshExternalCollection not implemented")
@@ -1947,6 +1964,24 @@ func _DataCoord_BatchUpdateManifest_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _DataCoord_UpdateSegmentColumnGroups_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateSegmentColumnGroupsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(DataCoordServer).UpdateSegmentColumnGroups(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: DataCoord_UpdateSegmentColumnGroups_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(DataCoordServer).UpdateSegmentColumnGroups(ctx, req.(*UpdateSegmentColumnGroupsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _DataCoord_RefreshExternalCollection_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RefreshExternalCollectionRequest)
 	if err := dec(in); err != nil {
@@ -2227,6 +2262,10 @@ var DataCoord_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "BatchUpdateManifest",
 			Handler:    _DataCoord_BatchUpdateManifest_Handler,
+		},
+		{
+			MethodName: "UpdateSegmentColumnGroups",
+			Handler:    _DataCoord_UpdateSegmentColumnGroups_Handler,
 		},
 		{
 			MethodName: "RefreshExternalCollection",

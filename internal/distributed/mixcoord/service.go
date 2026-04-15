@@ -1019,6 +1019,10 @@ func (s *Server) BatchUpdateManifest(ctx context.Context, req *datapb.BatchUpdat
 	return s.mixCoord.BatchUpdateManifest(ctx, req)
 }
 
+func (s *Server) UpdateSegmentColumnGroups(ctx context.Context, req *datapb.UpdateSegmentColumnGroupsRequest) (*commonpb.Status, error) {
+	return s.mixCoord.UpdateSegmentColumnGroups(ctx, req)
+}
+
 // ClientHeartbeat handles client telemetry heartbeat requests
 func (s *Server) ClientHeartbeat(ctx context.Context, req *milvuspb.ClientHeartbeatRequest) (*milvuspb.ClientHeartbeatResponse, error) {
 	return s.mixCoord.ClientHeartbeat(ctx, req)

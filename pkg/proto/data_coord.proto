@@ -117,6 +117,9 @@ service DataCoord {
   // batch update manifest
   rpc BatchUpdateManifest(BatchUpdateManifestRequest) returns(common.Status){}
 
+  // storage-v2 column group maintenance
+  rpc UpdateSegmentColumnGroups(UpdateSegmentColumnGroupsRequest) returns(common.Status){}
+
   // External Table Refresh APIs
   rpc RefreshExternalCollection(RefreshExternalCollectionRequest) returns(RefreshExternalCollectionResponse){}
   rpc GetRefreshExternalCollectionProgress(GetRefreshExternalCollectionProgressRequest) returns(GetRefreshExternalCollectionProgressResponse){}
@@ -1639,4 +1642,12 @@ message BatchUpdateManifestRequest {
 message BatchUpdateManifestItem {
   int64 segment_id = 1;
   int64 manifest_version = 2;
+}
+
+message UpdateSegmentColumnGroupsRequest {
+  common.MsgBase base = 1;
+  int64 segment_id = 2;
+  // key   = top-level fieldID of the column group (group ID).
+  // value = the full FieldBinlog for the new group, including child_fields and binlogs.
+  map<int64, FieldBinlog> column_groups = 3;
 }

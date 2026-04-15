@@ -1005,6 +1005,7 @@ func (s *Server) GetRecoveryInfoV2(ctx context.Context, req *datapb.GetRecoveryI
 			IsSorted:            segment.GetIsSorted(),
 			IsSortedByNamespace: segment.GetIsSortedByNamespace(),
 			ManifestPath:        segment.GetManifestPath(),
+			DataVersion:         segment.GetDataVersion(),
 		})
 	}
 
@@ -2190,6 +2191,49 @@ func (s *Server) BatchUpdateManifest(ctx context.Context, req *datapb.BatchUpdat
 	}
 
 	log.Info("BatchUpdateManifest completed successfully")
+	return merr.Success(), nil
+}
+
+// UpdateSegmentColumnGroups adds one or more storage-v2 column groups to a
+// segment and removes the listed child fields from any pre-existing group that
+// previously owned them. Intended to be called from the proxy management
+// RESTful API for out-of-band binlog maintenance.
+func (s *Server) UpdateSegmentColumnGroups(ctx context.Context, req *datapb.UpdateSegmentColumnGroupsRequest) (*commonpb.Status, error) {
+	log := log.Ctx(ctx).With(zap.Int64("segmentID", req.GetSegmentId()))
+	if err := merr.CheckHealthy(s.GetStateCode()); err != nil {
+		return merr.Status(err), nil
+	}
+
+	if len(req.GetColumnGroups()) == 0 {
+		return merr.Status(merr.WrapErrParameterInvalidMsg("column_groups must not be empty")), nil
+	}
+
+	segment := s.meta.GetSegment(ctx, req.GetSegmentId())
+	if segment == nil {
+		return merr.Status(merr.WrapErrSegmentNotFound(req.GetSegmentId())), nil
+	}
+	if segment.GetStorageVersion() != storage.StorageV2 {
+		return merr.Status(merr.WrapErrParameterInvalidMsg(
+			fmt.Sprintf("column groups only supported on storage version 2, got %d", segment.GetStorageVersion()))), nil
+	}
+
+	for id, g := range req.GetColumnGroups() {
+		if g == nil {
+			return merr.Status(merr.WrapErrParameterInvalidMsg(
+				fmt.Sprintf("column group entry %d is nil", id))), nil
+		}
+		if id != g.GetFieldID() {
+			return merr.Status(merr.WrapErrParameterInvalidMsg(
+				fmt.Sprintf("map key %d mismatches FieldBinlog.fieldID %d", id, g.GetFieldID()))), nil
+		}
+	}
+
+	if err := s.meta.UpdateSegmentsInfo(ctx,
+		UpdateSegmentColumnGroupsOperator(req.GetSegmentId(), req.GetColumnGroups())); err != nil {
+		log.Warn("UpdateSegmentColumnGroups failed", zap.Error(err))
+		return merr.Status(err), nil
+	}
+	log.Info("UpdateSegmentColumnGroups success", zap.Int("newGroupCount", len(req.GetColumnGroups())))
 	return merr.Success(), nil
 }
 

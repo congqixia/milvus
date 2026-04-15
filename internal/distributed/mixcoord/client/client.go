@@ -2117,6 +2117,17 @@ func (c *Client) BatchUpdateManifest(ctx context.Context, req *datapb.BatchUpdat
 	})
 }
 
+func (c *Client) UpdateSegmentColumnGroups(ctx context.Context, req *datapb.UpdateSegmentColumnGroupsRequest, opts ...grpc.CallOption) (*commonpb.Status, error) {
+	req = typeutil.Clone(req)
+	commonpbutil.UpdateMsgBase(
+		req.GetBase(),
+		commonpbutil.FillMsgBaseFromClient(paramtable.GetNodeID(), commonpbutil.WithTargetID(c.grpcClient.GetNodeID())),
+	)
+	return wrapGrpcCall(ctx, c, func(client MixCoordClient) (*commonpb.Status, error) {
+		return client.UpdateSegmentColumnGroups(ctx, req)
+	})
+}
+
 // ClientHeartbeat handles client telemetry heartbeat requests
 func (c *Client) ClientHeartbeat(ctx context.Context, req *milvuspb.ClientHeartbeatRequest, opts ...grpc.CallOption) (*milvuspb.ClientHeartbeatResponse, error) {
 	return wrapGrpcCall(ctx, c, func(client MixCoordClient) (*milvuspb.ClientHeartbeatResponse, error) {

@@ -1306,6 +1306,10 @@ func (s *mixCoordImpl) BatchUpdateManifest(ctx context.Context, req *datapb.Batc
 	return s.datacoordServer.BatchUpdateManifest(ctx, req)
 }
 
+func (s *mixCoordImpl) UpdateSegmentColumnGroups(ctx context.Context, req *datapb.UpdateSegmentColumnGroupsRequest) (*commonpb.Status, error) {
+	return s.datacoordServer.UpdateSegmentColumnGroups(ctx, req)
+}
+
 // Client Telemetry methods - forwarded to rootcoord
 
 func (s *mixCoordImpl) ClientHeartbeat(ctx context.Context, req *milvuspb.ClientHeartbeatRequest) (*milvuspb.ClientHeartbeatResponse, error) {
