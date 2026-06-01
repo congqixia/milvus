@@ -134,6 +134,7 @@ func (bw *BulkPackWriterV3) Write(ctx context.Context, pack *SyncPack) (
 
 	basePath, baseVersion, parseErr := packed.UnmarshalManifestPath(bw.initialManifestPath)
 	if parseErr != nil {
+		log.Warn("CQX unmarshal manifest failed", zap.Int64("segment", pack.segmentID), zap.String("manifest", bw.manifestPath), zap.String("initManifest", bw.initialManifestPath))
 		err = parseErr
 		return
 	}

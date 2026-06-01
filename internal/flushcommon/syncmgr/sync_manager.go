@@ -158,6 +158,7 @@ func (mgr *syncManager) submit(ctx context.Context, key int64, task Task, callba
 		if err == nil {
 			return nil
 		}
+		log.Warn("CQX sync manager handler error", zap.String("taskKey", taskKey), zap.Error(err))
 		task.HandleError(err)
 		return err
 	}
