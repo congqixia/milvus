@@ -155,9 +155,22 @@ TencentCloudSTSAssumeRoleWebIdentityCredentialsProvider::Reload() {
     if (tokenFile) {
         Aws::String token((std::istreambuf_iterator<char>(tokenFile)),
                           std::istreambuf_iterator<char>());
-        if (!token.empty() && token.back() == '\n') {
+        const auto originalSize = token.size();
+        const bool trimmedTrailingNewline =
+            !token.empty() && token.back() == '\n';
+        if (trimmedTrailingNewline) {
             token.pop_back();
         }
+        const bool containsCarriageReturn =
+            token.find('\r') != Aws::String::npos;
+        const bool containsNewline = token.find('\n') != Aws::String::npos;
+        AWS_LOGSTREAM_DEBUG(
+            STS_ASSUME_ROLE_WEB_IDENTITY_LOG_TAG,
+            "Loaded web identity token from file with original_size="
+                << originalSize << ", trimmed_size=" << token.size()
+                << ", trimmed_trailing_newline=" << trimmedTrailingNewline
+                << ", contains_carriage_return=" << containsCarriageReturn
+                << ", contains_newline=" << containsNewline);
         m_token = token;
     } else {
         AWS_LOGSTREAM_ERROR(STS_ASSUME_ROLE_WEB_IDENTITY_LOG_TAG,
@@ -169,6 +182,15 @@ TencentCloudSTSAssumeRoleWebIdentityCredentialsProvider::Reload() {
             m_region, m_providerId, m_token, m_roleArn, m_sessionName};
 
     auto result = m_client->GetAssumeRoleWithWebIdentityCredentials(request);
+    AWS_LOGSTREAM_DEBUG(
+        STS_ASSUME_ROLE_WEB_IDENTITY_LOG_TAG,
+        "STS credential reload result: access_key_empty="
+            << result.creds.GetAWSAccessKeyId().empty()
+            << ", secret_key_empty=" << result.creds.GetAWSSecretKey().empty()
+            << ", session_token_empty="
+            << result.creds.GetSessionToken().empty() << ", expiration="
+            << result.creds.GetExpiration().ToGmtString(
+                   Aws::Utils::DateFormat::ISO_8601));
     AWS_LOGSTREAM_TRACE(
         STS_ASSUME_ROLE_WEB_IDENTITY_LOG_TAG,
         "Successfully retrieved credentials with AWS_ACCESS_KEY: "

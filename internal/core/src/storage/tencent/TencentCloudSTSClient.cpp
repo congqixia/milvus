@@ -113,30 +113,52 @@ TencentCloudSTSCredentialsClient::GetAssumeRoleWithWebIdentityCredentials(
     //    httpRequest->SetContentType("application/x-www-form-urlencoded");
     httpRequest->SetContentType("application/json; charset=utf-8");
 
-    auto headers = httpRequest->GetHeaders();
-    Aws::String credentialsStr =
-        GetResourceWithAWSWebServiceResult(httpRequest).GetPayload();
+    auto awsResult = GetResourceWithAWSWebServiceResult(httpRequest);
+    auto responseCode = awsResult.GetResponseCode();
+    Aws::String credentialsStr = awsResult.GetPayload();
+    AWS_LOGSTREAM_DEBUG(STS_RESOURCE_CLIENT_LOG_TAG,
+                        "STS response received with http_status="
+                            << static_cast<int>(responseCode)
+                            << ", payload_size=" << credentialsStr.size());
 
     // Parse credentials
     STSAssumeRoleWithWebIdentityResult result;
     if (credentialsStr.empty()) {
         AWS_LOGSTREAM_WARN(STS_RESOURCE_CLIENT_LOG_TAG,
-                           "Get an empty credential from sts");
+                           "Get an empty credential from sts, http_status="
+                               << static_cast<int>(responseCode));
         return result;
     }
 
     auto json = Utils::Json::JsonView(credentialsStr);
     auto rootNode = json.GetObject("Response");
     if (rootNode.IsNull()) {
-        AWS_LOGSTREAM_WARN(STS_RESOURCE_CLIENT_LOG_TAG,
-                           "Get Response from credential result failed");
+        AWS_LOGSTREAM_WARN(
+            STS_RESOURCE_CLIENT_LOG_TAG,
+            "Get Response from credential result failed, http_status="
+                << static_cast<int>(responseCode)
+                << ", payload=" << credentialsStr);
+        return result;
+    }
+
+    auto errorNode = rootNode.GetObject("Error");
+    if (!errorNode.IsNull()) {
+        AWS_LOGSTREAM_WARN(
+            STS_RESOURCE_CLIENT_LOG_TAG,
+            "STS returned error response, http_status="
+                << static_cast<int>(responseCode)
+                << ", code=" << errorNode.GetString("Code")
+                << ", message=" << errorNode.GetString("Message")
+                << ", request_id=" << rootNode.GetString("RequestId"));
         return result;
     }
 
     auto credentialsNode = rootNode.GetObject("Credentials");
     if (credentialsNode.IsNull()) {
         AWS_LOGSTREAM_WARN(STS_RESOURCE_CLIENT_LOG_TAG,
-                           "Get Credentials from Response failed");
+                           "Get Credentials from Response failed, http_status="
+                               << static_cast<int>(responseCode)
+                               << ", payload=" << credentialsStr);
         return result;
     }
     result.creds.SetAWSAccessKeyId(credentialsNode.GetString("TmpSecretId"));
@@ -146,6 +168,16 @@ TencentCloudSTSCredentialsClient::GetAssumeRoleWithWebIdentityCredentials(
         Aws::Utils::StringUtils::Trim(rootNode.GetString("Expiration").c_str())
             .c_str(),
         Aws::Utils::DateFormat::ISO_8601));
+
+    AWS_LOGSTREAM_DEBUG(
+        STS_RESOURCE_CLIENT_LOG_TAG,
+        "Parsed STS credentials with access_key_empty="
+            << result.creds.GetAWSAccessKeyId().empty()
+            << ", secret_key_empty=" << result.creds.GetAWSSecretKey().empty()
+            << ", session_token_empty="
+            << result.creds.GetSessionToken().empty()
+            << ", expiration=" << rootNode.GetString("Expiration")
+            << ", request_id=" << rootNode.GetString("RequestId"));
 
     return result;
 }
