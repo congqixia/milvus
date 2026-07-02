@@ -149,7 +149,14 @@ TencentCloudSTSCredentialsClient::GetAssumeRoleWithWebIdentityCredentials(
                 << static_cast<int>(responseCode)
                 << ", code=" << errorNode.GetString("Code")
                 << ", message=" << errorNode.GetString("Message")
-                << ", request_id=" << rootNode.GetString("RequestId"));
+                << ", request_id=" << rootNode.GetString("RequestId")
+                << ", region=" << request.region
+                << ", provider_id=" << request.providerId
+                << ", role_arn=" << request.roleArn
+                << ", session_name=" << request.roleSessionName
+                << ", web_identity_token_size="
+                << request.webIdentityToken.size() << ", payload="
+                << credentialsStr);
         return result;
     }
 
