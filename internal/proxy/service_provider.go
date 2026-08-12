@@ -96,6 +96,23 @@ type CachedProxyServiceProvider struct {
 	*Proxy
 }
 
+// CollectionLookupErrorStatus converts a user-facing collection lookup
+// failure to its public wire representation, including the established
+// collection-not-found message kept for SDK compatibility.
+func CollectionLookupErrorStatus(err error, database, collectionName string) *commonpb.Status {
+	status := &commonpb.Status{}
+	if errors.Is(err, merr.ErrCollectionNotFound) {
+		// nolint
+		status.ErrorCode = commonpb.ErrorCode_CollectionNotExists
+		// nolint
+		status.Reason = fmt.Sprintf("can't find collection[database=%s][collection=%s]", database, collectionName)
+		status.ExtraInfo = map[string]string{merr.InputErrorFlagKey: "true"}
+	} else {
+		status = merr.Status(err)
+	}
+	return status
+}
+
 // cloneStructArrayFields creates a deep copy of struct array fields to avoid modifying cached data
 func cloneStructArrayFields(fields []*schemapb.StructArrayFieldSchema) []*schemapb.StructArrayFieldSchema {
 	if fields == nil {
@@ -156,24 +173,10 @@ func (node *CachedProxyServiceProvider) DescribeCollection(ctx context.Context,
 		DbName:         request.DbName,
 	}
 
-	wrapErrorStatus := func(err error) *commonpb.Status {
-		status := &commonpb.Status{}
-		if errors.Is(err, merr.ErrCollectionNotFound) {
-			// nolint
-			status.ErrorCode = commonpb.ErrorCode_CollectionNotExists
-			// nolint
-			status.Reason = fmt.Sprintf("can't find collection[database=%s][collection=%s]", request.DbName, request.CollectionName)
-			status.ExtraInfo = map[string]string{merr.InputErrorFlagKey: "true"}
-		} else {
-			status = merr.Status(err)
-		}
-		return status
-	}
-
 	if request.CollectionName == "" && request.CollectionID > 0 {
 		collName, err := globalMetaCache.GetCollectionName(ctx, request.DbName, request.CollectionID)
 		if err != nil {
-			resp.Status = wrapErrorStatus(err)
+			resp.Status = CollectionLookupErrorStatus(err, request.DbName, request.CollectionName)
 			return resp, nil
 		}
 		request.CollectionName = collName
@@ -181,19 +184,19 @@ func (node *CachedProxyServiceProvider) DescribeCollection(ctx context.Context,
 
 	// validate collection name, ref describeCollectionTask.PreExecute
 	if err = validateCollectionName(request.CollectionName); err != nil {
-		resp.Status = wrapErrorStatus(err)
+		resp.Status = CollectionLookupErrorStatus(err, request.DbName, request.CollectionName)
 		return resp, nil
 	}
 
 	request.CollectionID, err = globalMetaCache.GetCollectionID(ctx, request.DbName, request.CollectionName)
 	if err != nil {
-		resp.Status = wrapErrorStatus(err)
+		resp.Status = CollectionLookupErrorStatus(err, request.DbName, request.CollectionName)
 		return resp, nil
 	}
 
 	c, err := globalMetaCache.GetCollectionInfo(ctx, request.DbName, request.CollectionName, request.CollectionID)
 	if err != nil {
-		resp.Status = wrapErrorStatus(err)
+		resp.Status = CollectionLookupErrorStatus(err, request.DbName, request.CollectionName)
 		return resp, nil
 	}
 

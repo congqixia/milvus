@@ -579,7 +579,7 @@ func (t *searchTask) initAdvancedSearchRequest(ctx context.Context) error {
 			return err
 		}
 		if typeutil.IsFieldSparseFloatVector(t.schema.CollectionSchema, internalSubReq.FieldId) {
-			metrics.ProxySearchSparseNumNonZeros.WithLabelValues(strconv.FormatInt(paramtable.GetNodeID(), 10), t.collectionName, metrics.HybridSearchLabel, strconv.FormatInt(internalSubReq.FieldId, 10)).Observe(float64(typeutil.EstimateSparseVectorNNZFromPlaceholderGroup(internalSubReq.PlaceholderGroup, int(internalSubReq.GetNq()))))
+			t.observeSparseVectorNNZ(metrics.HybridSearchLabel, internalSubReq.FieldId, internalSubReq.PlaceholderGroup, int(internalSubReq.GetNq()))
 		}
 		// Convert placeholder group vector type if needed (e.g., fp32 -> fp16/bf16)
 		internalSubReq.PlaceholderGroup, err = t.convertPlaceholderIfNeeded(subReq.GetPlaceholderGroup(), internalSubReq.FieldId)
@@ -829,7 +829,7 @@ func (t *searchTask) initSearchRequest(ctx context.Context) error {
 	}
 	t.PkFilter = checkSegmentFilter(plan)
 	if typeutil.IsFieldSparseFloatVector(t.schema.CollectionSchema, t.FieldId) {
-		metrics.ProxySearchSparseNumNonZeros.WithLabelValues(strconv.FormatInt(paramtable.GetNodeID(), 10), t.collectionName, metrics.SearchLabel, strconv.FormatInt(t.FieldId, 10)).Observe(float64(typeutil.EstimateSparseVectorNNZFromPlaceholderGroup(t.request.GetPlaceholderGroup(), int(t.request.GetNq()))))
+		t.observeSparseVectorNNZ(metrics.SearchLabel, t.FieldId, t.request.GetPlaceholderGroup(), int(t.request.GetNq()))
 	}
 	// Convert placeholder group vector type if needed (e.g., fp32 -> fp16/bf16)
 	placeholderType := getPlaceholderType(t.request.GetPlaceholderGroup())
@@ -898,6 +898,15 @@ func (t *searchTask) initSearchRequest(ctx context.Context) error {
 		zap.Stringer("plan", plan)) // may be very large if large term passed.
 
 	return nil
+}
+
+func (t *searchTask) observeSparseVectorNNZ(queryType string, fieldID int64, placeholderGroup []byte, nq int) {
+	metrics.ProxySearchSparseNumNonZeros.WithLabelValues(
+		strconv.FormatInt(paramtable.GetNodeID(), 10),
+		t.request.GetCollectionName(),
+		queryType,
+		strconv.FormatInt(fieldID, 10),
+	).Observe(float64(typeutil.EstimateSparseVectorNNZFromPlaceholderGroup(placeholderGroup, nq)))
 }
 
 // convertPlaceholderIfNeeded converts fp32 vectors to fp16/bf16 if the target field uses lower precision.

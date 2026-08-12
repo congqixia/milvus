@@ -2923,12 +2923,28 @@ func GetCollectionRateSubLabel(req any) string {
 	return ratelimitutil.GetCollectionSubLabel(dbName.(string), collectionName.(string))
 }
 
+func setReadRequestStats(ctx context.Context, inboundLabel, databaseName, collectionName string) {
+	metrics.GetStats(ctx).
+		SetNodeID(paramtable.GetNodeID()).
+		SetInboundLabel(inboundLabel).
+		SetDatabaseName(databaseName).
+		SetCollectionName(collectionName)
+}
+
 // Search searches the most similar records of requests.
 func (node *Proxy) Search(ctx context.Context, request *milvuspb.SearchRequest) (*milvuspb.SearchResults, error) {
 	var err error
 	rsp := &milvuspb.SearchResults{
 		Status: merr.Success(),
 	}
+	setReadRequestStats(ctx, metrics.SearchLabel, request.GetDbName(), request.GetCollectionName())
+	metrics.ProxyReceivedNQ.WithLabelValues(
+		strconv.FormatInt(paramtable.GetNodeID(), 10),
+		metrics.SearchLabel,
+		request.GetDbName(),
+		request.GetCollectionName(),
+	).Add(float64(request.GetNq()))
+
 	if err := merr.CheckHealthy(node.GetStateCode()); err != nil {
 		rsp.Status = merr.Status(err)
 		return rsp, nil
@@ -3000,19 +3016,6 @@ func (node *Proxy) Search(ctx context.Context, request *milvuspb.SearchRequest) 
 }
 
 func (node *Proxy) search(ctx context.Context, request *milvuspb.SearchRequest, optimizedSearch bool, isRecallEvaluation bool) (*milvuspb.SearchResults, bool, bool, bool, error) {
-	metrics.GetStats(ctx).
-		SetNodeID(paramtable.GetNodeID()).
-		SetInboundLabel(metrics.SearchLabel).
-		SetDatabaseName(request.GetDbName()).
-		SetCollectionName(request.GetCollectionName())
-
-	metrics.ProxyReceivedNQ.WithLabelValues(
-		strconv.FormatInt(paramtable.GetNodeID(), 10),
-		metrics.SearchLabel,
-		request.GetDbName(),
-		request.GetCollectionName(),
-	).Add(float64(request.GetNq()))
-
 	if err := merr.CheckHealthy(node.GetStateCode()); err != nil {
 		return &milvuspb.SearchResults{
 			Status: merr.Status(err),
@@ -3227,6 +3230,8 @@ func (node *Proxy) HybridSearch(ctx context.Context, request *milvuspb.HybridSea
 	rsp := &milvuspb.SearchResults{
 		Status: merr.Success(),
 	}
+	setReadRequestStats(ctx, metrics.HybridSearchLabel, request.GetDbName(), request.GetCollectionName())
+
 	if err := merr.CheckHealthy(node.GetStateCode()); err != nil {
 		rsp.Status = merr.Status(err)
 		return rsp, nil
@@ -3288,12 +3293,6 @@ func (l *hybridSearchRequestExprLogger) String() string {
 }
 
 func (node *Proxy) hybridSearch(ctx context.Context, request *milvuspb.HybridSearchRequest, optimizedSearch bool) (*milvuspb.SearchResults, bool, bool, error) {
-	metrics.GetStats(ctx).
-		SetNodeID(paramtable.GetNodeID()).
-		SetInboundLabel(metrics.HybridSearchLabel).
-		SetDatabaseName(request.GetDbName()).
-		SetCollectionName(request.GetCollectionName())
-
 	if err := merr.CheckHealthy(node.GetStateCode()); err != nil {
 		return &milvuspb.SearchResults{
 			Status: merr.Status(err),

@@ -526,11 +526,18 @@ func prepareReadRequestSnapshot(ctx context.Context, c *gin.Context, req any, ch
 
 	ctx, err, _ := proxy.EnsureReadRequestSnapshotForRequest(ctx, req)
 	if err != nil {
+		status := merr.Status(err)
+		dbGetter, hasDB := req.(requestutil.DBNameGetter)
+		collectionGetter, hasCollection := req.(requestutil.CollectionNameGetter)
+		if hasDB && hasCollection {
+			status = proxy.CollectionLookupErrorStatus(err, dbGetter.GetDbName(), collectionGetter.GetCollectionName())
+		}
+		responseErr := merr.Error(status)
 		HTTPAbortReturn(c, http.StatusOK, gin.H{
-			HTTPReturnCode:    merr.Code(err),
-			HTTPReturnMessage: err.Error(),
+			HTTPReturnCode:    merr.Code(responseErr),
+			HTTPReturnMessage: status.GetReason(),
 		})
-		return ctx, err
+		return ctx, responseErr
 	}
 	c.Request = c.Request.WithContext(ctx)
 	return ctx, nil

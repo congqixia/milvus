@@ -109,7 +109,9 @@ Store `{snapshot, err}` in context and make resolution idempotent. The gRPC priv
 - after authorization succeeds, the handler returns the saved resolution error;
 - rate limiting and the handler consume the same context snapshot.
 
-REST V1 pins the snapshot in its DQL interceptor and propagates the context returned by authorization. REST V2 first runs authorization, returns a saved snapshot-resolution error only after authorization succeeds, and pins the snapshot before schema/placeholder preprocessing; the common wrapper checks the same context idempotently. Schema conversion, limiter accounting, and the Proxy method therefore use the same binding.
+REST V1 pins the snapshot in its DQL interceptor and propagates the context returned by authorization. REST V2 first runs authorization, returns a saved snapshot-resolution error only after authorization succeeds, and pins the snapshot before schema/placeholder preprocessing; the common wrapper checks the same context idempotently. When the request is executed by the current Proxy, schema conversion, limiter accounting, and the Proxy method therefore use the same binding.
+
+This guarantee does not cross the legacy-Proxy forwarding boundary used by standalone rolling upgrades. A REST DQL request forwarded from the current Proxy to a legacy Proxy carries the original protobuf request, but its request-scoped context snapshot cannot cross the gRPC hop. The legacy Proxy therefore resolves the collection name or alias independently. Supporting a pinned binding across that compatibility path requires rewriting the forwarded request to the pinned canonical collection name and is outside the scope of this change.
 
 Direct internal/test calls that do not pass through interceptors use an idempotent `EnsureReadRequestSnapshot` fallback.
 
@@ -196,6 +198,8 @@ For a 2.6 backport, request binding must be accompanied by fill/invalidation ord
 If the pinned collection is dropped after snapshot creation, the request must continue using the pinned id and fail through the existing by-id/query execution error path. It must not re-resolve the alias and execute against a replacement collection.
 
 Alias changes between iterator pages continue to return the existing collection-id mismatch error.
+
+The request-scoped consistency guarantee applies to metadata consumers in the current Proxy process. Standalone REST DQL requests forwarded to a legacy Proxy during a rolling upgrade retain the legacy path's independent collection-name resolution semantics.
 
 An internal request-snapshot invariant violation is a system failure/TOCTOU bug, never an input error.
 

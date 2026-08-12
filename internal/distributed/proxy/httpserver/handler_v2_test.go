@@ -1989,7 +1989,7 @@ func initHTTPServerV2(proxyComponent types.ProxyComponent, needAuth bool) *gin.E
 	return ginHandler
 }
 
-func TestPrepareReadRequestSnapshotWritesErrorResponse(t *testing.T) {
+func TestPrepareReadRequestSnapshotPreservesCollectionNotFoundMessage(t *testing.T) {
 	paramtable.Init()
 	proxy.InitEmptyGlobalCache()
 	t.Cleanup(proxy.InitEmptyGlobalCache)
@@ -2010,11 +2010,40 @@ func TestPrepareReadRequestSnapshotWritesErrorResponse(t *testing.T) {
 		CollectionName: "missing_collection",
 	}, false)
 	require.ErrorIs(t, err, merr.ErrCollectionNotFound)
+	assert.Equal(t, "can't find collection[database=default][collection=missing_collection]", err.Error())
 
 	var response ReturnErrMsg
 	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &response))
 	assert.Equal(t, merr.Code(snapshotErr), response.Code)
-	assert.Equal(t, snapshotErr.Error(), response.Message)
+	assert.Equal(t, "can't find collection[database=default][collection=missing_collection]", response.Message)
+}
+
+func TestSearchV2PreservesCollectionNotFoundMessage(t *testing.T) {
+	paramtable.Init()
+	proxy.InitEmptyGlobalCache()
+	t.Cleanup(proxy.InitEmptyGlobalCache)
+
+	const collectionName = "missing_collection"
+	snapshotErr := merr.WrapErrCollectionNotFound(collectionName)
+	proxyComponent := mocks.NewMockProxy(t)
+	proxyComponent.EXPECT().DescribeCollection(mock.Anything, mock.Anything).Return(
+		&milvuspb.DescribeCollectionResponse{Status: merr.Status(snapshotErr)},
+		nil,
+	).Once()
+	testEngine := initHTTPServerV2(proxyComponent, false)
+
+	req := httptest.NewRequest(
+		http.MethodPost,
+		versionalV2(EntityCategory, SearchAction),
+		bytes.NewReader([]byte("{\"collectionName\":\"missing_collection\",\"data\":[[0.1,0.2]],\"limit\":10}")),
+	)
+	recorder := httptest.NewRecorder()
+	testEngine.ServeHTTP(recorder, req)
+
+	var response ReturnErrMsg
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &response))
+	assert.Equal(t, merr.Code(snapshotErr), response.Code)
+	assert.Equal(t, "can't find collection[database=default][collection=missing_collection]", response.Message)
 }
 
 /**
