@@ -182,7 +182,12 @@ func CreateManifestForSegment(
 
 	// Begin transaction (read_version=0 for earliest, retry_limit=10)
 	var transactionHandle C.LoonTransactionHandle
+	// The open reads the manifest revision from storage and blocks the calling
+	// goroutine's OS thread; bound it process-wide like every other blocking
+	// manifest FFI call so concurrent commits cannot explode thread count.
+	acquireManifestFFI(context.Background())
 	result := C.loon_transaction_begin(cBasePath, cProperties, C.int64_t(0), C.LOON_TRANSACTION_RESOLVE_OVERWRITE /* resolve_id */, getRetryLimit() /* retry_limit */, &transactionHandle)
+	releaseManifestFFI()
 	if err := HandleLoonFFIResult(result); err != nil {
 		return "", merr.WrapErrStorage(err, "loon_transaction_begin failed")
 	}
@@ -196,7 +201,11 @@ func CreateManifestForSegment(
 
 	// Commit transaction
 	var committedVersion C.int64_t
+	// The commit writes the manifest revision and blocks the calling
+	// goroutine's OS thread; bound it process-wide like the open above.
+	acquireManifestFFI(context.Background())
 	result = C.loon_transaction_commit(transactionHandle, &committedVersion)
+	releaseManifestFFI()
 	if err := HandleLoonFFIResult(result); err != nil {
 		return "", merr.WrapErrStorage(err, "loon_transaction_commit failed")
 	}
@@ -288,6 +297,9 @@ func CreateMilvusTableManifestFromSegmentManifests(
 	if extfs.MilvusTablePKMode.usesExternalPrimaryKey() {
 		hasExternalPrimaryKey = C.int(1)
 	}
+	// The call reads the source segment manifests and writes the new target
+	// manifest, blocking this goroutine's OS thread; bound it process-wide.
+	acquireManifestFFI(context.Background())
 	result := C.loon_milvus_table_create_manifest_from_segment_manifests(
 		cBasePath,
 		cPathsPtr,
@@ -300,6 +312,7 @@ func CreateMilvusTableManifestFromSegmentManifests(
 		hasExternalPrimaryKey,
 		&outManifestPath,
 	)
+	releaseManifestFFI()
 	if err := HandleLoonFFIResult(result); err != nil {
 		return "", err
 	}
